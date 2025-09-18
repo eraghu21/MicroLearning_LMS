@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import io
-import pyaescrypt
+import pyAesCrypt
 import time
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
