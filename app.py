@@ -18,30 +18,40 @@ except Exception:
 # === Video duration in seconds ===
 VIDEO_DURATION = 180  # 3 minutes
 
-# === Load & Decrypt Excel from GitHub ===
+# === Load & Decrypt Excel from GitHub with validation ===
 @st.cache_data
 def load_encrypted_excel(url):
     response = requests.get(url)
     if response.status_code != 200:
-        st.error("❌ Failed to fetch encrypted file from GitHub.")
+        st.error(f"❌ Failed to fetch file from GitHub. Status code: {response.status_code}")
+        st.stop()
+
+    # Check if content looks like an AES file (first few bytes)
+    if len(response.content) < 32:
+        st.error("❌ Downloaded file seems too small to be a valid AES file.")
+        st.stop()
+    if response.content[:4] == b'<htm':
+        st.error("❌ GitHub link points to an HTML page, not the raw AES file. Use raw.githubusercontent.com link.")
         st.stop()
 
     encrypted_bytes = io.BytesIO(response.content)
     decrypted_stream = io.BytesIO()
 
     try:
-        # Decrypt stream (deprecated parameter removed)
         pyAesCrypt.decryptStream(encrypted_bytes, decrypted_stream, password, bufferSize)
         decrypted_stream.seek(0)
         df = pd.read_excel(decrypted_stream)
         return df
+    except ValueError:
+        st.error("❌ Decryption failed: File is not a valid AES file or password is incorrect.")
+        st.stop()
     except Exception as e:
-        st.error("❌ Failed to decrypt or process file.")
+        st.error("❌ Failed to process decrypted file.")
         st.exception(e)
         st.stop()
 
 # === Load Student List ===
-STUDENT_LIST_URL = "https://github.com/eraghu21/MicroLearning_LMS/blob/main/Students_List.xlsx.aes"
+STUDENT_LIST_URL = "https://raw.githubusercontent.com/eraghu21/MicroLearning_LMS/main/Students_List.xlsx.aes"
 df_students = load_encrypted_excel(STUDENT_LIST_URL)
 df_students["RegNo"] = df_students["RegNo"].astype(str).str.strip().str.upper()
 
@@ -50,7 +60,6 @@ PROGRESS_URL = "https://raw.githubusercontent.com/eraghu21/MicroLearning_LMS/mai
 try:
     df_progress = load_encrypted_excel(PROGRESS_URL)
 except:
-    # If progress file doesn't exist, initialize
     df_progress = df_students[["RegNo", "Name"]].copy()
     df_progress["VideoCompleted"] = False
     df_progress["CertDownloaded"] = False
