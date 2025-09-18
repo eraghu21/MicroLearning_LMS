@@ -19,7 +19,7 @@ except Exception:
 @st.cache_data
 def load_student_data():
     # 🔗 Replace this with your actual raw GitHub link to the AES file
-    aes_url = "https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/Students_List.xlsx.aes"
+    aes_url = "https://raw.githubusercontent.com/eraghu21/MicroLearning_LMS/main/Students_List.xlsx.aes"
 
     # Download encrypted AES file from GitHub
     response = requests.get(aes_url)
