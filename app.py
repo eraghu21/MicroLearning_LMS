@@ -26,12 +26,11 @@ def load_encrypted_excel(url):
         st.error(f"❌ Failed to fetch file from GitHub. Status code: {response.status_code}")
         st.stop()
 
-    # Basic validation
     if len(response.content) < 32:
         st.error("❌ Downloaded file seems too small to be a valid AES file.")
         st.stop()
     if response.content[:4] == b'<htm':
-        st.error("❌ GitHub link points to an HTML page, not the raw AES file. Use raw.githubusercontent.com link.")
+        st.error("❌ GitHub link points to an HTML page, not the raw AES file.")
         st.stop()
 
     encrypted_bytes = io.BytesIO(response.content)
@@ -104,7 +103,7 @@ if regno:
         progress = st.session_state.progress.loc[idx]
 
         # --- Video Section ---
-        st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")  # Replace with your video
+        st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")  # Replace with your actual video
         session_key = f"timer_{regno}"
 
         if not progress["VideoCompleted"]:
@@ -119,32 +118,23 @@ if regno:
             mins, secs = divmod(remaining, 60)
             st.markdown(f"⏱️ Time left to complete: **{mins:02d}:{secs:02d}**")
 
-            if elapsed >= VIDEO_DURATION and not st.session_state[session_key]["cert_ready"]:
+            # ✅ Mark video complete
+            if elapsed >= VIDEO_DURATION:
                 st.session_state[session_key]["cert_ready"] = True
-                st.success("✅ Video completed! Certificate is ready.")
-                st.session_state.progress.loc[idx, ["VideoCompleted", "CertDownloaded"]] = True
+                st.session_state.progress.loc[idx, "VideoCompleted"] = True
+                st.success("✅ Video completed! Certificate is ready for download.")
 
-            if st.session_state[session_key]["cert_ready"]:
-                cert_file = generate_certificate(
-                    student["Name"], regno, student["Dept"], student["Year"], student["Section"]
-                )
-                with open(cert_file, "rb") as f:
-                    st.download_button(
-                        "⬇️ Download Certificate",
-                        f,
-                        file_name=cert_file,
-                        help="You can download your certificate once this session."
-                    )
-
-        else:
-            st.info("✅ You have already completed this video. Certificate is available for download.")
+        # === Certificate Download Section ===
+        if st.session_state.get(session_key, {}).get("cert_ready", False) or progress["VideoCompleted"]:
             cert_file = generate_certificate(
                 student["Name"], regno, student["Dept"], student["Year"], student["Section"]
             )
             with open(cert_file, "rb") as f:
-                st.download_button(
+                if st.download_button(
                     "⬇️ Download Certificate",
                     f,
                     file_name=cert_file,
-                    help="Certificate can be downloaded anytime."
-                )
+                    help="Click to download your certificate."
+                ):
+                    st.session_state.progress.loc[idx, "CertDownloaded"] = True
+                    st.success("📜 Certificate downloaded successfully!")
