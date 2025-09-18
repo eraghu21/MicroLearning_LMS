@@ -16,7 +16,7 @@ except Exception:
     password = "your-default-password"
 
 # === Video duration in seconds ===
-VIDEO_DURATION = 180  # 3 mins
+VIDEO_DURATION = 180  # 3 minutes
 
 # === Load & Decrypt Excel from GitHub ===
 @st.cache_data
@@ -25,17 +25,20 @@ def load_encrypted_excel(url):
     if response.status_code != 200:
         st.error("❌ Failed to fetch encrypted file from GitHub.")
         st.stop()
+
     encrypted_bytes = io.BytesIO(response.content)
     decrypted_stream = io.BytesIO()
-try:
-    pyAesCrypt.decryptStream(encrypted_bytes, decrypted_stream, password, bufferSize)
-    decrypted_stream.seek(0)
-    df = pd.read_excel(decrypted_stream)
-except Exception as e:
-    st.error("❌ Failed to decrypt or process file.")
-    st.exception(e)
-    st.stop()
 
+    try:
+        # Decrypt stream (deprecated parameter removed)
+        pyAesCrypt.decryptStream(encrypted_bytes, decrypted_stream, password, bufferSize)
+        decrypted_stream.seek(0)
+        df = pd.read_excel(decrypted_stream)
+        return df
+    except Exception as e:
+        st.error("❌ Failed to decrypt or process file.")
+        st.exception(e)
+        st.stop()
 
 # === Load Student List ===
 STUDENT_LIST_URL = "https://raw.githubusercontent.com/eraghu21/MicroLearning_LMS/main/Students_List.xlsx.aes"
@@ -43,8 +46,7 @@ df_students = load_encrypted_excel(STUDENT_LIST_URL)
 df_students["RegNo"] = df_students["RegNo"].astype(str).str.strip().str.upper()
 
 # === Load Progress File (Create if not exists) ===
-PROGRESS_URL = "https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/progress_encrypted.xlsx.aes"
-
+PROGRESS_URL = "https://raw.githubusercontent.com/eraghu21/MicroLearning_LMS/main/progress_encrypted.xlsx.aes"
 try:
     df_progress = load_encrypted_excel(PROGRESS_URL)
 except:
