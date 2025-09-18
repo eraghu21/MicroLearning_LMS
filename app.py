@@ -7,44 +7,18 @@ import time
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from datetime import datetime
-import gspread
-from google.oauth2.service_account import Credentials
 
-# === AES Config ===
+# === CONFIG ===
 bufferSize = 64 * 1024
+VIDEO_DURATION = 180  # 3 minutes
+
+# === Secret Password ===
 try:
     password = st.secrets["encryption"]["password"]
 except Exception:
     password = "your-default-password"
 
-# === Google Sheets Config ===
-try:
-    service_account_info = st.secrets["gcp_service_account"]
-
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
-
-    credentials = Credentials.from_service_account_info(
-        dict(service_account_info),
-        scopes=scopes
-    )
-    gclient = gspread.authorize(credentials)
-
-    # TODO: replace with your real Google Sheet URL
-    SHEET_URL = "https://docs.google.com/spreadsheets/d/1IYQaHWgRwKwQYvxpE-bQYsHozuxIIkceufynUZwBwdI/edit#gid=0"
-    sheet = gclient.open_by_url(SHEET_URL).sheet1
-
-except Exception as e:
-    sheet = None
-    st.error("⚠️ Could not connect to Google Sheets. Check secrets.toml and permissions.")
-    st.exception(e)
-
-# === Video duration in seconds ===
-VIDEO_DURATION = 180  # 3 minutes
-
-# === Load & Decrypt Excel from GitHub with validation ===
+# === Load & Decrypt Student Excel ===
 @st.cache_data
 def load_encrypted_excel(url):
     response = requests.get(url)
@@ -52,11 +26,8 @@ def load_encrypted_excel(url):
         st.error(f"❌ Failed to fetch file from GitHub. Status code: {response.status_code}")
         st.stop()
 
-    if len(response.content) < 32:
-        st.error("❌ Downloaded file seems too small to be a valid AES file.")
-        st.stop()
-    if response.content[:4] == b'<htm':
-        st.error("❌ GitHub link points to an HTML page, not the raw AES file.")
+    if len(response.content) < 32 or response.content[:4] == b'<htm':
+        st.error("❌ GitHub link might not be a valid AES file. Check your URL (use raw.githubusercontent.com).")
         st.stop()
 
     encrypted_bytes = io.BytesIO(response.content)
@@ -67,48 +38,12 @@ def load_encrypted_excel(url):
         decrypted_stream.seek(0)
         df = pd.read_excel(decrypted_stream)
         return df
-    except ValueError:
-        st.error("❌ Decryption failed: wrong password or invalid AES file.")
-        st.stop()
     except Exception as e:
-        st.error("❌ Failed to process decrypted file.")
+        st.error("❌ Decryption failed: Check password or file.")
         st.exception(e)
         st.stop()
 
-# === Load Student List ===
-STUDENT_LIST_URL = "https://raw.githubusercontent.com/eraghu21/MicroLearning_LMS/main/Students_List.xlsx.aes"
-df_students = load_encrypted_excel(STUDENT_LIST_URL)
-df_students["RegNo"] = df_students["RegNo"].astype(str).str.strip().str.upper()
-
-# === Google Sheets Helper Functions ===
-def get_student_status(regno):
-    """Fetch student status from Google Sheet"""
-    if sheet is None:
-        return None
-    try:
-        cell = sheet.find(regno)
-        if cell:
-            return sheet.row_values(cell.row)  # [RegNo, Name, Status, Timestamp]
-    except:
-        return None
-    return None
-
-def update_student_status(regno, name, status):
-    """Update or insert student progress in Google Sheet"""
-    if sheet is None:
-        return
-    try:
-        cell = sheet.find(regno)
-        if cell:
-            sheet.update_cell(cell.row, 3, status)
-            sheet.update_cell(cell.row, 4, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        else:
-            sheet.append_row([regno, name, status, datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
-    except Exception as e:
-        st.error("⚠️ Google Sheet update failed")
-        st.exception(e)
-
-# === Generate Certificate ===
+# === Certificate Generator ===
 def generate_certificate(name, regno, dept, year, section):
     filename = f"certificate_{regno}.pdf"
     c = canvas.Canvas(filename, pagesize=A4)
@@ -127,11 +62,19 @@ def generate_certificate(name, regno, dept, year, section):
     c.save()
     return filename
 
-# === Streamlit UI ===
-st.set_page_config(page_title="Microlearning LMS", layout="centered")
+# === Load Data from GitHub AES File ===
+STUDENT_LIST_URL = "https://raw.githubusercontent.com/eraghu21/MicroLearning_LMS/main/Students_List.xlsx.aes"
+df_students = load_encrypted_excel(STUDENT_LIST_URL)
+df_students["RegNo"] = df_students["RegNo"].astype(str).str.strip().str.upper()
+
+# === Setup Session Tracking ===
+if "progress" not in st.session_state:
+    st.session_state.progress = {}
+
+st.set_page_config(page_title="🎓 Microlearning LMS", layout="centered")
 st.title("🎓 Microlearning Platform")
 
-# --- Login ---
+# === Student Login ===
 st.subheader("🔐 Student Login")
 regno = st.text_input("Enter your Registration Number:").strip().upper()
 
@@ -143,40 +86,40 @@ if regno:
         student = student.iloc[0]
         st.success(f"Welcome **{student['Name']}**!")
 
-        # ✅ Check Google Sheets first
-        status_row = get_student_status(regno)
-        if status_row and status_row[2] in ["Video Completed", "Certificate Downloaded"]:
-            st.info("✅ You already completed the video.")
-            cert_file = generate_certificate(student["Name"], regno, student["Dept"], student["Year"], student["Section"])
-            with open(cert_file, "rb") as f:
-                st.download_button("⬇️ Download Certificate", f, file_name=cert_file)
-            update_student_status(regno, student["Name"], "Certificate Downloaded")
-            st.stop()
+        # Initialize this student's session state
+        if regno not in st.session_state.progress:
+            st.session_state.progress[regno] = {
+                "start_time": time.time(),
+                "video_completed": False,
+                "certificate_generated": False
+            }
 
-        # --- Video Section ---
+        progress = st.session_state.progress[regno]
+
+        # === Show Video ===
         st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")  # Replace with your real video
-        session_key = f"timer_{regno}"
 
-        if session_key not in st.session_state:
-            st.session_state[session_key] = {"start_time": time.time(), "cert_ready": False}
+        elapsed = time.time() - progress["start_time"]
+        remaining = max(0, int(VIDEO_DURATION - elapsed))
+        progress_percent = min(elapsed / VIDEO_DURATION, 1.0)
 
-        elapsed = time.time() - st.session_state[session_key]["start_time"]
-        progress_ratio = min(elapsed / VIDEO_DURATION, 1.0)
-        st.progress(progress_ratio, text="⏳ Watching video...")
+        if progress["video_completed"]:
+            st.info("ℹ️ You’ve already completed this video. You can download your certificate anytime.")
+        else:
+            st.progress(progress_percent, text="⏳ Watching video...")
 
-        remaining = max(int(VIDEO_DURATION - elapsed), 0)
-        mins, secs = divmod(remaining, 60)
-        st.markdown(f"⏱️ Time left to complete: **{mins:02d}:{secs:02d}**")
+            mins, secs = divmod(remaining, 60)
+            st.markdown(f"⏱️ Time left to unlock certificate: **{mins:02d}:{secs:02d}**")
 
-        if elapsed >= VIDEO_DURATION and not st.session_state[session_key]["cert_ready"]:
-            st.session_state[session_key]["cert_ready"] = True
-            st.success("✅ Video completed! Certificate is ready.")
-            update_student_status(regno, student["Name"], "Video Completed")
+        # === Certificate Ready ===
+        if elapsed >= VIDEO_DURATION or progress["video_completed"]:
+            if not progress["video_completed"]:
+                progress["video_completed"] = True  # Mark as done on first complete
 
-        if st.session_state[session_key]["cert_ready"]:
             cert_file = generate_certificate(
                 student["Name"], regno, student["Dept"], student["Year"], student["Section"]
             )
+
+            st.success("🎉 Video completed. Certificate is ready!")
             with open(cert_file, "rb") as f:
-                if st.download_button("⬇️ Download Certificate", f, file_name=cert_file):
-                    update_student_status(regno, student["Name"], "Certificate Downloaded")
+                st.download_button("⬇️ Download Certificate", f, file_name=cert_file)
