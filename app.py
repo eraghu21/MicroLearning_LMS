@@ -27,15 +27,15 @@ def load_encrypted_excel(url):
         st.stop()
     encrypted_bytes = io.BytesIO(response.content)
     decrypted_stream = io.BytesIO()
-    try:
-      pyAesCrypt.decryptStream(encrypted_bytes, decrypted_stream, password, bufferSize)
-        decrypted_stream.seek(0)
-        df = pd.read_excel(decrypted_stream)
-        return df
-    except Exception as e:
-        st.error("❌ Failed to decrypt or process file.")
-        st.exception(e)
-        st.stop()
+   try:
+    pyAesCrypt.decryptStream(encrypted_bytes, decrypted_stream, password, bufferSize)
+    decrypted_stream.seek(0)
+    df = pd.read_excel(decrypted_stream)
+except Exception as e:
+    st.error("❌ Failed to decrypt or process file.")
+    st.exception(e)
+    st.stop()
+
 
 # === Load Student List ===
 STUDENT_LIST_URL = "https://raw.githubusercontent.com/eraghu21/MicroLearning_LMS/main/Students_List.xlsx.aes"
