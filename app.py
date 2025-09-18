@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
-import io
 import pyAesCrypt
+import io
+import requests
 import time
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -12,55 +13,55 @@ bufferSize = 64 * 1024
 try:
     password = st.secrets["encryption"]["password"]
 except Exception:
-    password = "your-default-password"  # fallback for local testing
+    password = "your-default-password"  # fallback
 
-# === Encryption/Decryption Functions ===
-def decrypt_text(cipher_hex: str) -> str:
-    try:
-        data = bytes.fromhex(cipher_hex)
-        f_in = io.BytesIO(data)
-        f_out = io.BytesIO()
-        pyAesCrypt.decryptStream(f_in, f_out, password, bufferSize, len(data))
-        return f_out.getvalue().decode("utf-8")
-    except Exception:
-        return cipher_hex  # fallback
-
-# === Load and Decrypt Student List ===
+# === Load & Decrypt Full AES Excel File ===
 @st.cache_data
 def load_student_data():
-    df = pd.read_excel("encrypted_students.xlsx")
-    for col in df.columns:
-        df[col] = df[col].astype(str).apply(decrypt_text)
-    df["RegNo"] = df["RegNo"].str.strip().str.upper()
-    return df
+    # Replace with your raw GitHub .aes file link
+    aes_url = "https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/Students_List.xlsx.aes"
 
-# === Generate Certificate ===
+    # Download the AES file
+    response = requests.get(aes_url)
+    if response.status_code != 200:
+        st.error("❌ Failed to fetch encrypted file from GitHub.")
+        st.stop()
+
+    encrypted_bytes = io.BytesIO(response.content)
+    decrypted_stream = io.BytesIO()
+
+    try:
+        # Decrypt in memory
+        pyAesCrypt.decryptStream(encrypted_bytes, decrypted_stream, password, bufferSize, len(response.content))
+        decrypted_stream.seek(0)
+        df = pd.read_excel(decrypted_stream)
+        df["RegNo"] = df["RegNo"].str.strip().str.upper()
+        return df
+    except Exception as e:
+        st.error("❌ Failed to decrypt student list.")
+        st.exception(e)
+        st.stop()
+
+# === Certificate Generator ===
 def generate_certificate(name, regno, dept, year, section):
     filename = f"certificate_{regno}.pdf"
     c = canvas.Canvas(filename, pagesize=A4)
-
     c.setFont("Helvetica-Bold", 24)
     c.drawCentredString(300, 750, "Certificate of Completion")
-
     c.setFont("Helvetica", 14)
     c.drawCentredString(300, 700, "This is to certify that")
-
     c.setFont("Helvetica-Bold", 18)
     c.drawCentredString(300, 670, f"{name} (RegNo: {regno})")
-
     c.setFont("Helvetica", 14)
     c.drawCentredString(300, 640, f"from {dept} - Year {year} - Section {section}")
-
     c.drawCentredString(300, 610, "has successfully completed the microlearning module.")
-
     c.setFont("Helvetica", 12)
     c.drawCentredString(300, 570, f"Issued on: {datetime.today().strftime('%d-%m-%Y')}")
-
     c.showPage()
     c.save()
     return filename
 
-# === Streamlit UI ===
+# === Streamlit App ===
 st.set_page_config(page_title="Microlearning LMS", layout="centered")
 st.title("🎓 Microlearning Platform")
 
