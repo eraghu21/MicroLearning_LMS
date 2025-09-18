@@ -4,21 +4,22 @@ import pyAesCrypt
 import io
 import requests
 import time
+from datetime import datetime
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-from datetime import datetime
 
 # === CONFIG ===
 bufferSize = 64 * 1024
 VIDEO_DURATION = 180  # seconds
+STUDENT_LIST_URL = "https://raw.githubusercontent.com/eraghu21/MicroLearning_LMS/main/Students_List.xlsx.aes"
 
-# === Secret Password (from Streamlit secrets or fallback)
+# === Secret Password ===
 try:
     password = st.secrets["encryption"]["password"]
 except Exception:
     password = "your-default-password"
 
-# === Load & Decrypt Student Excel from GitHub ===
+# === Load Encrypted Excel from GitHub ===
 @st.cache_data
 def load_encrypted_excel(url):
     response = requests.get(url)
@@ -39,7 +40,7 @@ def load_encrypted_excel(url):
         df = pd.read_excel(decrypted_stream)
         return df
     except Exception as e:
-        st.error("❌ Decryption failed. Check file format or password.")
+        st.error("❌ Decryption failed. Check password or file format.")
         st.exception(e)
         st.stop()
 
@@ -62,15 +63,11 @@ def generate_certificate(name, regno, dept, year, section):
     c.save()
     return filename
 
-# === Load encrypted student data ===
-STUDENT_LIST_URL = "https://raw.githubusercontent.com/eraghu21/MicroLearning_LMS/main/Students_List.xlsx.aes"
+# === Load Student Data ===
 df_students = load_encrypted_excel(STUDENT_LIST_URL)
 df_students["RegNo"] = df_students["RegNo"].astype(str).str.strip().str.upper()
 
-# === Session tracking ===
-if "progress" not in st.session_state:
-    st.session_state.progress = {}
-
+# === Page Config ===
 st.set_page_config(page_title="🎓 Microlearning LMS", layout="centered")
 st.title("🎓 Microlearning Platform")
 
@@ -78,6 +75,11 @@ st.title("🎓 Microlearning Platform")
 st.subheader("🔐 Student Login")
 regno = st.text_input("Enter your Registration Number:").strip().upper()
 
+# Session Setup
+if "progress" not in st.session_state:
+    st.session_state.progress = {}
+
+# === Auth ===
 if regno:
     student = df_students[df_students["RegNo"] == regno]
     if student.empty:
@@ -86,7 +88,7 @@ if regno:
         student = student.iloc[0]
         st.success(f"Welcome **{student['Name']}**!")
 
-        # Initialize progress if not already
+        # Initialize student session progress
         if regno not in st.session_state.progress:
             st.session_state.progress[regno] = {
                 "start_time": time.time(),
@@ -95,10 +97,10 @@ if regno:
 
         progress = st.session_state.progress[regno]
 
-        # === Show Video ===
-        st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")  # Replace with your video
+        # Show video
+        st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")  # Your actual video
 
-        # === Timer Logic ===
+        # Timer logic
         elapsed = time.time() - progress["start_time"]
         remaining = max(0, int(VIDEO_DURATION - elapsed))
         progress_percent = min(elapsed / VIDEO_DURATION, 1.0)
@@ -108,17 +110,18 @@ if regno:
             mins, secs = divmod(remaining, 60)
             st.markdown(f"⏱️ Time left to unlock certificate: **{mins:02d}:{secs:02d}**")
 
+            # Auto-refresh page every second (safe version)
             if remaining > 0:
-                time.sleep(1)
-                st.experimental_rerun()
+                st.experimental_data_editor({})
+                st.experimental_autorefresh(interval=1000, limit=None)
             else:
                 progress["video_completed"] = True
-                st.success("🎉 Video completed. Your certificate is ready.")
+                st.success("🎉 Video completed! Certificate is now ready.")
 
         else:
-            st.info("ℹ️ You’ve already completed this video. You can rewatch it or download your certificate anytime.")
+            st.info("ℹ️ You’ve already completed this video. You can download your certificate below.")
 
-        # === Certificate Download ===
+        # Certificate download
         if progress["video_completed"]:
             cert_file = generate_certificate(
                 student["Name"], regno, student["Dept"], student["Year"], student["Section"]
