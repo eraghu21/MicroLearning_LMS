@@ -103,7 +103,7 @@ if regno:
         progress = st.session_state.progress.loc[idx]
 
         # --- Video Section ---
-        st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")  # Replace with your actual video
+        st.video("https://youtu.be/Tva_sr4BUfk?si=C0PNAOhBN8S_7Dfw")  # Replace with your actual video
         session_key = f"timer_{regno}"
 
         if not progress["VideoCompleted"]:
