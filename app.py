@@ -17,7 +17,7 @@ STUDENT_LIST_URL = "https://raw.githubusercontent.com/eraghu21/MicroLearning_LMS
 try:
     password = st.secrets["encryption"]["password"]
 except Exception:
-    password = "your-default-password"
+    password = "your-default-password"  # fallback for local testing
 
 # === Load Encrypted Excel from GitHub ===
 @st.cache_data
@@ -98,7 +98,7 @@ if regno:
         progress = st.session_state.progress[regno]
 
         # Show video
-        st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")  # Your actual video
+        st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")  # Replace with your video URL
 
         # Timer logic
         elapsed = time.time() - progress["start_time"]
@@ -110,16 +110,15 @@ if regno:
             mins, secs = divmod(remaining, 60)
             st.markdown(f"⏱️ Time left to unlock certificate: **{mins:02d}:{secs:02d}**")
 
-            # Auto-refresh page every second (safe version)
             if remaining > 0:
-                st.experimental_data_editor({})
+                # Refresh page every 1 second safely
                 st.experimental_autorefresh(interval=1000, limit=None)
             else:
                 progress["video_completed"] = True
                 st.success("🎉 Video completed! Certificate is now ready.")
 
         else:
-            st.info("ℹ️ You’ve already completed this video. You can download your certificate below.")
+            st.info("ℹ️ You’ve already completed this video. You can rewatch it or download your certificate anytime.")
 
         # Certificate download
         if progress["video_completed"]:
