@@ -10,9 +10,9 @@ from datetime import datetime
 
 # === CONFIG ===
 bufferSize = 64 * 1024
-VIDEO_DURATION = 180  # seconds (3 minutes)
+VIDEO_DURATION = 180  # seconds
 
-# === Secret Password ===
+# === Secret Password (from Streamlit secrets or fallback)
 try:
     password = st.secrets["encryption"]["password"]
 except Exception:
@@ -62,12 +62,12 @@ def generate_certificate(name, regno, dept, year, section):
     c.save()
     return filename
 
-# === Load student data from GitHub AES ===
+# === Load encrypted student data ===
 STUDENT_LIST_URL = "https://raw.githubusercontent.com/eraghu21/MicroLearning_LMS/main/Students_List.xlsx.aes"
 df_students = load_encrypted_excel(STUDENT_LIST_URL)
 df_students["RegNo"] = df_students["RegNo"].astype(str).str.strip().str.upper()
 
-# === Initialize session state tracking ===
+# === Session tracking ===
 if "progress" not in st.session_state:
     st.session_state.progress = {}
 
@@ -86,7 +86,7 @@ if regno:
         student = student.iloc[0]
         st.success(f"Welcome **{student['Name']}**!")
 
-        # Initialize progress for student
+        # Initialize progress if not already
         if regno not in st.session_state.progress:
             st.session_state.progress[regno] = {
                 "start_time": time.time(),
@@ -95,18 +95,16 @@ if regno:
 
         progress = st.session_state.progress[regno]
 
-        # Show YouTube video
-        st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        # === Show Video ===
+        st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")  # Replace with your video
 
-        # Timer logic
+        # === Timer Logic ===
         elapsed = time.time() - progress["start_time"]
         remaining = max(0, int(VIDEO_DURATION - elapsed))
         progress_percent = min(elapsed / VIDEO_DURATION, 1.0)
 
         if not progress["video_completed"]:
-            # Show progress and countdown
             st.progress(progress_percent, text="⏳ Watching video...")
-
             mins, secs = divmod(remaining, 60)
             st.markdown(f"⏱️ Time left to unlock certificate: **{mins:02d}:{secs:02d}**")
 
@@ -115,11 +113,12 @@ if regno:
                 st.experimental_rerun()
             else:
                 progress["video_completed"] = True
-                st.experimental_rerun()
+                st.success("🎉 Video completed. Your certificate is ready.")
+
         else:
             st.info("ℹ️ You’ve already completed this video. You can rewatch it or download your certificate anytime.")
 
-        # Certificate ready
+        # === Certificate Download ===
         if progress["video_completed"]:
             cert_file = generate_certificate(
                 student["Name"], regno, student["Dept"], student["Year"], student["Section"]
