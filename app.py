@@ -28,7 +28,7 @@ def load_encrypted_excel(url):
     encrypted_bytes = io.BytesIO(response.content)
     decrypted_stream = io.BytesIO()
     try:
-        pyAesCrypt.decryptStream(encrypted_bytes, decrypted_stream, password, bufferSize, len(response.content))
+      pyAesCrypt.decryptStream(encrypted_bytes, decrypted_stream, password, bufferSize)
         decrypted_stream.seek(0)
         df = pd.read_excel(decrypted_stream)
         return df
@@ -39,7 +39,6 @@ def load_encrypted_excel(url):
 
 # === Load Student List ===
 STUDENT_LIST_URL = "https://raw.githubusercontent.com/eraghu21/MicroLearning_LMS/main/Students_List.xlsx.aes"
-
 df_students = load_encrypted_excel(STUDENT_LIST_URL)
 df_students["RegNo"] = df_students["RegNo"].astype(str).str.strip().str.upper()
 
