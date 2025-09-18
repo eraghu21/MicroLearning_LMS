@@ -26,7 +26,7 @@ def load_encrypted_excel(url):
         st.error(f"❌ Failed to fetch file from GitHub. Status code: {response.status_code}")
         st.stop()
 
-    # Check if content looks like an AES file (first few bytes)
+    # Basic validation
     if len(response.content) < 32:
         st.error("❌ Downloaded file seems too small to be a valid AES file.")
         st.stop()
@@ -51,18 +51,18 @@ def load_encrypted_excel(url):
         st.stop()
 
 # === Load Student List ===
-STUDENT_LIST_URL = "https://github.com/eraghu21/MicroLearning_LMS/main/Students_List.xlsx.aes"
+STUDENT_LIST_URL = "https://raw.githubusercontent.com/eraghu21/MicroLearning_LMS/main/Students_List.xlsx.aes"
 df_students = load_encrypted_excel(STUDENT_LIST_URL)
 df_students["RegNo"] = df_students["RegNo"].astype(str).str.strip().str.upper()
 
-# === Load Progress File (Create if not exists) ===
-PROGRESS_URL = "https://raw.githubusercontent.com/eraghu21/MicroLearning_LMS/main/progress_encrypted.xlsx.aes"
-try:
-    df_progress = load_encrypted_excel(PROGRESS_URL)
-except:
-    df_progress = df_students[["RegNo", "Name"]].copy()
-    df_progress["VideoCompleted"] = False
-    df_progress["CertDownloaded"] = False
+# === Initialize Progress Tracking ===
+if "progress" not in st.session_state:
+    st.session_state.progress = pd.DataFrame({
+        "RegNo": df_students["RegNo"],
+        "Name": df_students["Name"],
+        "VideoCompleted": False,
+        "CertDownloaded": False
+    })
 
 # === Generate Certificate ===
 def generate_certificate(name, regno, dept, year, section):
@@ -99,16 +99,14 @@ if regno:
         student = student.iloc[0]
         st.success(f"Welcome **{student['Name']}**!")
 
-        # Get progress for this student
-        progress = df_progress[df_progress["RegNo"] == regno].iloc[0]
+        # Get student progress
+        idx = st.session_state.progress.index[st.session_state.progress["RegNo"] == regno][0]
+        progress = st.session_state.progress.loc[idx]
 
         # --- Video Section ---
         st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")  # Replace with your video
-
-        # Unique session per student
         session_key = f"timer_{regno}"
 
-        # First time watching
         if not progress["VideoCompleted"]:
             if session_key not in st.session_state:
                 st.session_state[session_key] = {"start_time": time.time(), "cert_ready": False}
@@ -117,36 +115,29 @@ if regno:
             progress_ratio = min(elapsed / VIDEO_DURATION, 1.0)
             st.progress(progress_ratio, text="⏳ Watching video...")
 
-            # Time remaining
             remaining = max(int(VIDEO_DURATION - elapsed), 0)
             mins, secs = divmod(remaining, 60)
             st.markdown(f"⏱️ Time left to complete: **{mins:02d}:{secs:02d}**")
 
-            # Unlock certificate
             if elapsed >= VIDEO_DURATION and not st.session_state[session_key]["cert_ready"]:
                 st.session_state[session_key]["cert_ready"] = True
                 st.success("✅ Video completed! Certificate is ready.")
-                # Update progress
-                df_progress.loc[df_progress["RegNo"] == regno, ["VideoCompleted", "CertDownloaded"]] = True
+                st.session_state.progress.loc[idx, ["VideoCompleted", "CertDownloaded"]] = True
 
-            # Certificate download button (once)
             if st.session_state[session_key]["cert_ready"]:
                 cert_file = generate_certificate(
                     student["Name"], regno, student["Dept"], student["Year"], student["Section"]
                 )
                 with open(cert_file, "rb") as f:
-                    st.session_state[session_key]["cert_downloaded"] = True
                     st.download_button(
                         "⬇️ Download Certificate",
                         f,
                         file_name=cert_file,
-                        help="You can download your certificate only once this session."
+                        help="You can download your certificate once this session."
                     )
 
-        # Already watched video before
         else:
             st.info("✅ You have already completed this video. Certificate is available for download.")
-            # Show download button anytime
             cert_file = generate_certificate(
                 student["Name"], regno, student["Dept"], student["Year"], student["Section"]
             )
