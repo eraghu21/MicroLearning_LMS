@@ -13,15 +13,15 @@ bufferSize = 64 * 1024
 try:
     password = st.secrets["encryption"]["password"]
 except Exception:
-    password = "your-default-password"  # fallback
+    password = "your-default-password"  # Replace with your password if not using secrets
 
 # === Load & Decrypt Full AES Excel File ===
 @st.cache_data
 def load_student_data():
-    # Replace with your raw GitHub .aes file link
-    aes_url = "https://raw.githubusercontent.com/eraghu21/MicroLearning_LMS/main/Students_List.xlsx.aes"
+    # 🔗 Replace this with your actual raw GitHub link to the AES file
+    aes_url = "https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/Students_List.xlsx.aes"
 
-    # Download the AES file
+    # Download encrypted AES file from GitHub
     response = requests.get(aes_url)
     if response.status_code != 200:
         st.error("❌ Failed to fetch encrypted file from GitHub.")
@@ -31,14 +31,20 @@ def load_student_data():
     decrypted_stream = io.BytesIO()
 
     try:
-        # Decrypt in memory
+        # Decrypt file in memory
         pyAesCrypt.decryptStream(encrypted_bytes, decrypted_stream, password, bufferSize, len(response.content))
         decrypted_stream.seek(0)
+
+        # Read Excel content into pandas
         df = pd.read_excel(decrypted_stream)
-        df["RegNo"] = df["RegNo"].str.strip().str.upper()
+
+        # Clean RegNo column
+        df["RegNo"] = df["RegNo"].astype(str).str.strip().str.upper()
+
         return df
+
     except Exception as e:
-        st.error("❌ Failed to decrypt student list.")
+        st.error("❌ Failed to decrypt or process student list.")
         st.exception(e)
         st.stop()
 
@@ -61,10 +67,11 @@ def generate_certificate(name, regno, dept, year, section):
     c.save()
     return filename
 
-# === Streamlit App ===
+# === Streamlit UI ===
 st.set_page_config(page_title="Microlearning LMS", layout="centered")
 st.title("🎓 Microlearning Platform")
 
+# Load decrypted student data
 df_students = load_student_data()
 
 # --- Login Section ---
@@ -79,7 +86,7 @@ if regno:
         st.success(f"Welcome **{student['Name']}**!")
 
         # Learning video section
-        st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")  # Replace with your own video link
 
         if st.button("🎯 I have finished watching the video"):
             with st.spinner("Verifying..."):
@@ -89,7 +96,11 @@ if regno:
 
             # Generate certificate
             cert_file = generate_certificate(
-                student["Name"], regno, student["Dept"], student["Year"], student["Section"]
+                student["Name"],
+                regno,
+                student["Dept"],
+                student["Year"],
+                student["Section"]
             )
 
             with open(cert_file, "rb") as f:
