@@ -8,21 +8,19 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from datetime import datetime
 
-# === AES Config ===
+# === AES Decryption Config ===
 bufferSize = 64 * 1024
 try:
     password = st.secrets["encryption"]["password"]
 except Exception:
-    password = "your-default-password"  # Replace with your password if not using secrets
+    password = "your-default-password"  # fallback if secrets not set
 
-# === Load & Decrypt Full AES Excel File ===
+# === Load & Decrypt Encrypted Excel from GitHub ===
 @st.cache_data
 def load_student_data():
-    # 🔗 Replace this with your actual raw GitHub link to the AES file
-    aes_url = "https://raw.githubusercontent.com/eraghu21/MicroLearning_LMS/main/Students_List.xlsx.aes"
-
-    # Download encrypted AES file from GitHub
+    aes_url = "https://raw.githubusercontent.com/eraghu21/MicroLearning_LMS/main/Students_List.xlsx.aes" 
     response = requests.get(aes_url)
+
     if response.status_code != 200:
         st.error("❌ Failed to fetch encrypted file from GitHub.")
         st.stop()
@@ -31,24 +29,17 @@ def load_student_data():
     decrypted_stream = io.BytesIO()
 
     try:
-        # Decrypt file in memory
         pyAesCrypt.decryptStream(encrypted_bytes, decrypted_stream, password, bufferSize, len(response.content))
         decrypted_stream.seek(0)
-
-        # Read Excel content into pandas
         df = pd.read_excel(decrypted_stream)
-
-        # Clean RegNo column
         df["RegNo"] = df["RegNo"].astype(str).str.strip().str.upper()
-
         return df
-
     except Exception as e:
         st.error("❌ Failed to decrypt or process student list.")
         st.exception(e)
         st.stop()
 
-# === Certificate Generator ===
+# === Generate Certificate ===
 def generate_certificate(name, regno, dept, year, section):
     filename = f"certificate_{regno}.pdf"
     c = canvas.Canvas(filename, pagesize=A4)
@@ -67,14 +58,14 @@ def generate_certificate(name, regno, dept, year, section):
     c.save()
     return filename
 
-# === Streamlit UI ===
+# === App Config ===
 st.set_page_config(page_title="Microlearning LMS", layout="centered")
 st.title("🎓 Microlearning Platform")
 
-# Load decrypted student data
+# === Load Data ===
 df_students = load_student_data()
 
-# --- Login Section ---
+# === Login ===
 st.subheader("🔐 Student Login")
 regno = st.text_input("Enter your Registration Number:").strip().upper()
 
@@ -85,16 +76,28 @@ if regno:
         student = student.iloc[0]
         st.success(f"Welcome **{student['Name']}**!")
 
-        # Learning video section
-        st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")  # Replace with your own video link
+        # === Video Section ===
+        st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")  # Replace with your video
+        VIDEO_DURATION = 180  # In seconds (e.g., 3 mins)
 
-        if st.button("🎯 I have finished watching the video"):
-            with st.spinner("Verifying..."):
-                time.sleep(3)
+        # === Timer Logic ===
+        if "start_time" not in st.session_state:
+            st.session_state.start_time = time.time()
+            st.session_state.cert_ready = False
 
-            st.success("✅ Video watched! Your certificate is ready.")
+        elapsed = time.time() - st.session_state.start_time
+        progress = min(elapsed / VIDEO_DURATION, 1.0)
+        st.progress(progress, text="⏳ Watching...")
 
-            # Generate certificate
+        if elapsed >= VIDEO_DURATION:
+            if not st.session_state.cert_ready:
+                st.success("✅ Video completed!")
+                st.session_state.cert_ready = True
+
+        # === Certificate ===
+        if st.session_state.cert_ready:
+            st.success("🎉 Your certificate is ready!")
+
             cert_file = generate_certificate(
                 student["Name"],
                 regno,
@@ -105,6 +108,10 @@ if regno:
 
             with open(cert_file, "rb") as f:
                 st.download_button("⬇️ Download Certificate", f, file_name=cert_file)
+
+        else:
+            remaining = int(VIDEO_DURATION - elapsed)
+            st.info(f"⏳ Please wait {remaining} more seconds to unlock your certificate.")
 
     else:
         st.error("❌ Registration number not found!")
