@@ -7,6 +7,8 @@ import time
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from datetime import datetime
+import gspread
+from google.oauth2.service_account import Credentials
 
 # === AES Config ===
 bufferSize = 64 * 1024
@@ -14,6 +16,30 @@ try:
     password = st.secrets["encryption"]["password"]
 except Exception:
     password = "your-default-password"
+
+# === Google Sheets Config ===
+try:
+    service_account_info = st.secrets["gcp_service_account"]
+
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+
+    credentials = Credentials.from_service_account_info(
+        dict(service_account_info),
+        scopes=scopes
+    )
+    gclient = gspread.authorize(credentials)
+
+    # TODO: replace with your real Google Sheet URL
+    SHEET_URL = "https://docs.google.com/spreadsheets/d/1IYQaHWgRwKwQYvxpE-bQYsHozuxIIkceufynUZwBwdI/edit?gid=0#gid=0"
+    sheet = gclient.open_by_url(SHEET_URL).sheet1
+
+except Exception as e:
+    sheet = None
+    st.error("⚠️ Could not connect to Google Sheets. Check secrets.toml and permissions.")
+    st.exception(e)
 
 # === Video duration in seconds ===
 VIDEO_DURATION = 180  # 3 minutes
@@ -42,7 +68,7 @@ def load_encrypted_excel(url):
         df = pd.read_excel(decrypted_stream)
         return df
     except ValueError:
-        st.error("❌ Decryption failed: File is not a valid AES file or password is incorrect.")
+        st.error("❌ Decryption failed: wrong password or invalid AES file.")
         st.stop()
     except Exception as e:
         st.error("❌ Failed to process decrypted file.")
@@ -54,7 +80,7 @@ STUDENT_LIST_URL = "https://raw.githubusercontent.com/eraghu21/MicroLearning_LMS
 df_students = load_encrypted_excel(STUDENT_LIST_URL)
 df_students["RegNo"] = df_students["RegNo"].astype(str).str.strip().str.upper()
 
-# === Initialize Progress Tracking ===
+# === Initialize Progress Tracking (local session) ===
 if "progress" not in st.session_state:
     st.session_state.progress = pd.DataFrame({
         "RegNo": df_students["RegNo"],
@@ -82,6 +108,16 @@ def generate_certificate(name, regno, dept, year, section):
     c.save()
     return filename
 
+# === Save Progress to Google Sheets ===
+def save_progress_to_gsheet(regno, name, status):
+    if sheet is None:
+        return
+    try:
+        sheet.append_row([regno, name, status, datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
+    except Exception as e:
+        st.error("⚠️ Failed to update Google Sheet.")
+        st.exception(e)
+
 # === Streamlit UI ===
 st.set_page_config(page_title="Microlearning LMS", layout="centered")
 st.title("🎓 Microlearning Platform")
@@ -103,7 +139,7 @@ if regno:
         progress = st.session_state.progress.loc[idx]
 
         # --- Video Section ---
-        st.video("https://youtu.be/Tva_sr4BUfk?si=C0PNAOhBN8S_7Dfw")  # Replace with your actual video
+        st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")  # Replace with your video
         session_key = f"timer_{regno}"
 
         if not progress["VideoCompleted"]:
@@ -118,23 +154,38 @@ if regno:
             mins, secs = divmod(remaining, 60)
             st.markdown(f"⏱️ Time left to complete: **{mins:02d}:{secs:02d}**")
 
-            # ✅ Mark video complete
-            if elapsed >= VIDEO_DURATION:
+            if elapsed >= VIDEO_DURATION and not st.session_state[session_key]["cert_ready"]:
                 st.session_state[session_key]["cert_ready"] = True
-                st.session_state.progress.loc[idx, "VideoCompleted"] = True
-                st.success("✅ Video completed! Certificate is ready for download.")
+                st.success("✅ Video completed! Certificate is ready.")
+                st.session_state.progress.loc[idx, ["VideoCompleted"]] = True
 
-        # === Certificate Download Section ===
-        if st.session_state.get(session_key, {}).get("cert_ready", False) or progress["VideoCompleted"]:
+                # Save completion to Google Sheets
+                save_progress_to_gsheet(regno, student["Name"], "Video Completed")
+
+            if st.session_state[session_key]["cert_ready"]:
+                cert_file = generate_certificate(
+                    student["Name"], regno, student["Dept"], student["Year"], student["Section"]
+                )
+                with open(cert_file, "rb") as f:
+                    st.download_button(
+                        "⬇️ Download Certificate",
+                        f,
+                        file_name=cert_file,
+                        help="You can download your certificate once this session."
+                    )
+                # Save download status to Google Sheets
+                st.session_state.progress.loc[idx, ["CertDownloaded"]] = True
+                save_progress_to_gsheet(regno, student["Name"], "Certificate Downloaded")
+
+        else:
+            st.info("✅ You have already completed this video. Certificate is available for download.")
             cert_file = generate_certificate(
                 student["Name"], regno, student["Dept"], student["Year"], student["Section"]
             )
             with open(cert_file, "rb") as f:
-                if st.download_button(
+                st.download_button(
                     "⬇️ Download Certificate",
                     f,
                     file_name=cert_file,
-                    help="Click to download your certificate."
-                ):
-                    st.session_state.progress.loc[idx, "CertDownloaded"] = True
-                    st.success("📜 Certificate downloaded successfully!")
+                    help="Certificate can be downloaded anytime."
+                )
