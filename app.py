@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import pyAesCrypt
@@ -13,12 +14,13 @@ from email.message import EmailMessage
 from github import Github
 
 # === CONFIG ===
-VIDEO_DURATION = 180  # in seconds
+VIDEO_DURATION = 180  # in seconds (This will now be dynamically updated by YouTube API)
 bufferSize = 64 * 1024
 REPO_NAME = "eraghu21/MicroLearning_LMS"
 PROGRESS_FILE = "progress.json.aes"
 STUDENT_LIST_FILE = "Students_List.xlsx.aes"
 GITHUB_RAW_BASE = "https://raw.githubusercontent.com/eraghu21/MicroLearning_LMS/main/"
+YOUTUBE_VIDEO_ID = "dQw4w9WgXcQ" # The ID of the video to play
 
 # === SECRETS ===
 def get_secret(key):
@@ -148,15 +150,49 @@ if regno:
         already_completed = progress_data.get(regno, {}).get("completed", False)
 
         if not already_completed:
-            if "start_time" not in st.session_state:
-                st.session_state.start_time = time.time()
-            elapsed = time.time() - st.session_state.start_time
-            remaining = max(0, int(VIDEO_DURATION - elapsed))
-            st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
-            mins, secs = divmod(remaining, 60)
-            st.info(f"⏱️ Time left: {mins:02d}:{secs:02d}")
+            # Embed YouTube video using iframe and JavaScript API
+            st.markdown(f'''
+                <div id=
 
-            if remaining <= 0:
+
+
+'player'></div>
+<script>
+  var tag = document.createElement('script');
+  tag.src = "https://www.youtube.com/iframe_api";
+  var firstScriptTag = document.getElementsByTagName('script')[0];
+  firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+  var player;
+  function onYouTubeIframeAPIReady() {
+    player = new YT.Player('player', {
+      height: '360',
+      width: '640',
+      videoId: 'YOUTUBE_VIDEO_ID',
+      events: {
+        'onReady': onPlayerReady,
+        'onStateChange': onPlayerStateChange
+      }
+    });
+  }
+
+  function onPlayerReady(event) {
+    // You can add any on-ready logic here if needed
+  }
+
+  function onPlayerStateChange(event) {
+    if (event.data == YT.PlayerState.ENDED) {
+      // Send a message to Streamlit when the video ends
+      Streamlit.setComponentValue("video_ended");
+    }
+  }
+</script>
+'''.replace('YOUTUBE_VIDEO_ID', YOUTUBE_VIDEO_ID), unsafe_allow_html=True)
+
+            # Check for the video ended message from JavaScript
+            video_ended = st.session_state.get("video_ended", False)
+
+            if video_ended:
                 cert_file = generate_certificate(
                     student["Name"], regno, student["Dept"], student["Year"], student["Section"]
                 )
@@ -178,4 +214,5 @@ if regno:
             )
             with open(cert_file, "rb") as f:
                 st.download_button("⬇️ Download Certificate", f, file_name=cert_file)
+
 
