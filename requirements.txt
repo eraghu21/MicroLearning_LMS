@@ -7,3 +7,8 @@ gspread
 google-auth
 google-auth-oauthlib
 google-auth-httplib2
+streamlit
+openpyxl
+PyGithub
+reportlab
+secure-smtplib
