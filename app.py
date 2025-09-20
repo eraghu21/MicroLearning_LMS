@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import pyAesCrypt
@@ -151,43 +150,43 @@ if regno:
 
         if not already_completed:
             # Embed YouTube video using iframe and JavaScript API
-            st.markdown(f'''
-                <div id=
+            st.components.v1.html(f"""
+                <div id=\'player\'></div>
+                <script>
+                  var tag = document.createElement(\'script\');
+                  tag.src = "https://www.youtube.com/iframe_api";
+                  var firstScriptTag = document.getElementsByTagName(\'script\')[0];
+                  firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
+                  var player;
+                  function onYouTubeIframeAPIReady() {{
+                    player = new YT.Player(\'player\', {{
+                      height: \'360\',
+                      width: \'640\',
+                      videoId: \'{YOUTUBE_VIDEO_ID}\,',
+                      events: {{
+                        \'onReady\': onPlayerReady,
+                        \'onStateChange\': onPlayerStateChange
+                      }}
+                    }});
+                  }}
 
+                  function onPlayerReady(event) {{
+                    // You can add any on-ready logic here if needed
+                  }}
 
-'player'></div>
-<script>
-  var tag = document.createElement('script');
-  tag.src = "https://www.youtube.com/iframe_api";
-  var firstScriptTag = document.getElementsByTagName('script')[0];
-  firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-
-  var player;
-  function onYouTubeIframeAPIReady() {
-    player = new YT.Player('player', {
-      height: '360',
-      width: '640',
-      videoId: 'YOUTUBE_VIDEO_ID',
-      events: {
-        'onReady': onPlayerReady,
-        'onStateChange': onPlayerStateChange
-      }
-    });
-  }
-
-  function onPlayerReady(event) {
-    // You can add any on-ready logic here if needed
-  }
-
-  function onPlayerStateChange(event) {
-    if (event.data == YT.PlayerState.ENDED) {
-      // Send a message to Streamlit when the video ends
-      Streamlit.setComponentValue("video_ended");
-    }
-  }
-</script>
-'''.replace('YOUTUBE_VIDEO_ID', YOUTUBE_VIDEO_ID), unsafe_allow_html=True)
+                  function onPlayerStateChange(event) {{
+                    if (event.data == YT.PlayerState.ENDED) {{
+                      // Send a message to Streamlit when the video ends
+                      window.parent.postMessage({{
+                        type: \'streamlit:setComponentValue\',
+                        value: {{ video_ended: true }}
+                      }}, \'*
+                      \');
+                    }}
+                  }}
+                </script>
+                """.format(YOUTUBE_VIDEO_ID=YOUTUBE_VIDEO_ID), height=400)
 
             # Check for the video ended message from JavaScript
             video_ended = st.session_state.get("video_ended", False)
