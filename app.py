@@ -4,6 +4,7 @@ import pyAesCrypt
 import os
 import json
 import datetime
+import time
 from io import BytesIO
 from email.message import EmailMessage
 import smtplib
@@ -98,6 +99,10 @@ def send_email(to, name, regno, cert_bytes):
 # -------------------- Streamlit App --------------------
 st.title("🎓 Microlearning Certificate Portal")
 
+# Auto-refresh configuration for real-time countdown
+if "auto_refresh" not in st.session_state:
+    st.session_state.auto_refresh = True
+
 regno = st.text_input("Enter your Registration Number").strip().upper()
 
 if regno:
@@ -122,31 +127,52 @@ if regno:
         else:
             st.video(YOUTUBE_VIDEO_URL)
 
-            # Timer setup (3 minutes = 180 seconds)
+            # Initialize timer when video starts
             if "start_time" not in st.session_state:
-                st.session_state.start_time = datetime.datetime.now()
+                st.session_state.start_time = time.time()
+                st.session_state.video_watched = False
 
-            elapsed = (datetime.datetime.now() - st.session_state.start_time).seconds
+            # Calculate elapsed time in real-time
+            current_time = time.time()
+            elapsed = current_time - st.session_state.start_time
             remaining = max(0, 180 - elapsed)
 
-            # Countdown with progress bar
-            progress_percent = int(((180 - remaining) / 180) * 100)
-            st.progress(progress_percent)
-            st.write(f"⏳ Please watch the video. Button will appear in {remaining} seconds.")
-
-            if remaining <= 0:
-                if st.button("I have watched the complete video"):
+            # Progress bar and countdown display
+            progress_percent = min(100, int((elapsed / 180) * 100))
+            st.progress(progress_percent / 100)
+            
+            if remaining > 0:
+                minutes = int(remaining // 60)
+                seconds = int(remaining % 60)
+                st.write(f"⏳ Please watch the video. Button will appear in {minutes}:{seconds:02d}")
+                
+                # Auto-refresh every second for real-time countdown
+                if st.session_state.auto_refresh:
+                    time.sleep(1)
+                    st.rerun()
+            else:
+                # Video watching period completed
+                if not st.session_state.video_watched:
+                    st.session_state.video_watched = True
+                    st.success("✅ You have watched the video for 3 minutes!")
+                
+                st.write("🎉 Congratulations! You can now claim your certificate.")
+                
+                if st.button("I have watched the complete video", type="primary"):
+                    # Disable auto-refresh when button is clicked
+                    st.session_state.auto_refresh = False
+                    
                     cert_bytes = generate_certificate(name, regno, dept, year, section)
 
-                    # Auto-download hack (show download immediately)
+                    # Show download button
                     st.download_button("⬇️ Download Certificate", cert_bytes, file_name=f"{regno}_certificate.pdf")
 
                     # Auto-send email
                     try:
                         send_email(email, name, regno, cert_bytes)
                         st.success(f"📩 Certificate sent to {email}")
-                    except:
-                        st.warning("⚠️ Failed to send email.")
+                    except Exception as e:
+                        st.warning(f"⚠️ Failed to send email: {str(e)}")
 
                     # Save progress
                     progress[regno] = {
@@ -160,5 +186,22 @@ if regno:
                         "timestamp": str(datetime.datetime.now())
                     }
                     save_progress(progress)
+                    
+                    st.success("🎓 Certificate generated successfully!")
     else:
         st.error("Registration number not found.")
+
+# Add custom CSS for better styling
+st.markdown("""
+<style>
+    .stProgress > div > div > div > div {
+        background-color: #00ff00;
+    }
+    .stButton > button[type="primary"] {
+        background-color: #4CAF50;
+        color: white;
+        font-weight: bold;
+    }
+</style>
+""", unsafe_allow_html=True)
+
