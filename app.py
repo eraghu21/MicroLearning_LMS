@@ -12,24 +12,44 @@ from docx import Document
 
 # -------------------- Configuration --------------------
 BUFFER_SIZE = 64 * 1024
-AES_FILE = "Students_List.xlsx.aes"
+AES_FILE = "Students_List.xlsx.aes"   # updated
 PROGRESS_FILE = "progress.json"
 YOUTUBE_VIDEO_URL = "https://www.youtube.com/embed/dQw4w9WgXcQ"  # Replace with your video URL
 
 # -------------------- Load Secrets --------------------
-password = st.secrets["encryption"]["password"]
-email_sender = st.secrets["email"]["sender"]
-email_password = st.secrets["email"]["password"]
+# Fallback values if secrets are missing
+password = None
+email_sender = None
+email_password = None
+
+try:
+    password = st.secrets["encryption"]["password"]
+    email_sender = st.secrets["email"]["sender"]
+    email_password = st.secrets["email"]["password"]
+except Exception:
+    # For local testing (⚠️ replace with your real values)
+    password = "yourpassword"
+    email_sender = "youremail@gmail.com"
+    email_password = "your-email-app-password"
 
 # -------------------- Helper Functions --------------------
 @st.cache_data(show_spinner=False)
 def load_students_list():
-    with open(AES_FILE, "rb") as fIn:
-        decrypted = BytesIO()
-        pyAesCrypt.decryptStream(fIn, decrypted, password, BUFFER_SIZE, len(fIn.read()))
-        decrypted.seek(0)
-        df = pd.read_excel(decrypted)
-    return df
+    try:
+        # Try AES decryption
+        with open(AES_FILE, "rb") as fIn:
+            decrypted = BytesIO()
+            pyAesCrypt.decryptStream(fIn, decrypted, password, BUFFER_SIZE, os.path.getsize(AES_FILE))
+            decrypted.seek(0)
+            df = pd.read_excel(decrypted)
+        return df
+    except Exception as e:
+        # Fallback: try plain Excel if not AES
+        try:
+            return pd.read_excel(AES_FILE)
+        except Exception as e2:
+            st.error("❌ Failed to load students list. Ensure file is a valid Excel or AES-encrypted Excel.")
+            st.stop()
 
 def load_progress():
     if not os.path.exists(PROGRESS_FILE):
@@ -51,12 +71,17 @@ def generate_certificate(name, regno):
     return output.getvalue()
 
 def send_email(to, name, regno, cert_bytes):
+    if not email_sender or not email_password:
+        st.warning("⚠️ Email credentials not configured. Skipping email send.")
+        return
     msg = EmailMessage()
     msg['Subject'] = "Your Certificate of Completion"
     msg['From'] = email_sender
     msg['To'] = to
     msg.set_content(f"Dear {name},\n\nCongratulations! Your certificate is attached.\n\nRegards,\nAdmin")
-    msg.add_attachment(cert_bytes, maintype='application', subtype='vnd.openxmlformats-officedocument.wordprocessingml.document', filename=f"{regno}_certificate.docx")
+    msg.add_attachment(cert_bytes, maintype='application',
+                       subtype='vnd.openxmlformats-officedocument.wordprocessingml.document',
+                       filename=f"{regno}_certificate.docx")
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
         smtp.login(email_sender, email_password)
         smtp.send_message(msg)
