@@ -5,19 +5,19 @@ import os
 import json
 import datetime
 from io import BytesIO
-from zipfile import ZipFile
 from email.message import EmailMessage
 import smtplib
-from docx import Document
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
 
 # -------------------- Configuration --------------------
 BUFFER_SIZE = 64 * 1024
-AES_FILE = "Students_List.xlsx.aes"   # updated filename
+AES_FILE = "Students_List.xlsx.aes"
 PROGRESS_FILE = "progress.json"
-YOUTUBE_VIDEO_URL = "https://youtu.be/Tva_sr4BUfk?si=GukUUa-tY-VvYo73"  # Replace with your video URL
+YOUTUBE_VIDEO_URL = "https://youtu.be/Tva_sr4BUfk?si=GukUUa-tY-VvYo73"
 
 # -------------------- Load Secrets --------------------
-# Fallback values if secrets are missing
 password = None
 email_sender = None
 email_password = None
@@ -27,7 +27,6 @@ try:
     email_sender = st.secrets["email"]["sender"]
     email_password = st.secrets["email"]["password"]
 except Exception:
-    # For local testing (⚠️ replace with your real values)
     password = "yourpassword"
     email_sender = "youremail@gmail.com"
     email_password = "your-email-app-password"
@@ -36,7 +35,6 @@ except Exception:
 @st.cache_data(show_spinner=False)
 def load_students_list():
     try:
-        # Try AES decryption
         with open(AES_FILE, "rb") as fIn:
             decrypted = BytesIO()
             pyAesCrypt.decryptStream(
@@ -45,10 +43,8 @@ def load_students_list():
             decrypted.seek(0)
             df = pd.read_excel(decrypted)
     except Exception:
-        # Fallback: try plain Excel if not AES
         df = pd.read_excel(AES_FILE)
 
-    # 🔑 Ensure RegNo is always string for comparison
     df["RegNo"] = df["RegNo"].astype(str).str.strip()
     return df
 
@@ -62,14 +58,26 @@ def save_progress(progress):
     with open(PROGRESS_FILE, "w") as f:
         json.dump(progress, f, indent=4)
 
-def generate_certificate(name, regno):
-    doc = Document()
-    doc.add_heading("Certificate of Completion", 0)
-    doc.add_paragraph(f"This is to certify that {name} ({regno}) has successfully completed the video.")
-    doc.add_paragraph(f"Date: {datetime.date.today()}")
-    output = BytesIO()
-    doc.save(output)
-    return output.getvalue()
+def generate_certificate(name, regno, dept, year, section):
+    """Generate PDF certificate with department, year, section"""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    styles = getSampleStyleSheet()
+    story = []
+
+    story.append(Paragraph("<b>Certificate of Completion</b>", styles['Title']))
+    story.append(Spacer(1, 30))
+    story.append(Paragraph(
+        f"This is to certify that <b>{name}</b> ({regno}), "
+        f"Department of <b>{dept}</b>, Year: <b>{year}</b>, Section: <b>{section}</b> "
+        f"has successfully completed the video.", styles['Normal']
+    ))
+    story.append(Spacer(1, 20))
+    story.append(Paragraph(f"Date: {datetime.date.today()}", styles['Normal']))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
 
 def send_email(to, name, regno, cert_bytes):
     if not email_sender or not email_password:
@@ -81,8 +89,8 @@ def send_email(to, name, regno, cert_bytes):
     msg['To'] = to
     msg.set_content(f"Dear {name},\n\nCongratulations! Your certificate is attached.\n\nRegards,\nAdmin")
     msg.add_attachment(cert_bytes, maintype='application',
-                       subtype='vnd.openxmlformats-officedocument.wordprocessingml.document',
-                       filename=f"{regno}_certificate.docx")
+                       subtype='pdf',
+                       filename=f"{regno}_certificate.pdf")
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
         smtp.login(email_sender, email_password)
         smtp.send_message(msg)
@@ -98,33 +106,59 @@ if regno:
     if not student.empty:
         name = student.iloc[0]["Name"]
         email = student.iloc[0]["Email"]
-        st.success(f"Welcome, {name}!")
+        dept = student.iloc[0]["Department"]
+        year = student.iloc[0]["Year"]
+        section = student.iloc[0]["Section"]
+
+        st.success(f"Welcome, {name} ({dept}, Year {year}, Section {section})")
         progress = load_progress()
         record = progress.get(regno, {})
-        
+
         if record.get("video_completed"):
             st.info("✅ You have already completed the video.")
             if st.button("Download Certificate Again"):
-                cert_bytes = generate_certificate(name, regno)
-                st.download_button("⬇️ Download Certificate", cert_bytes, file_name=f"{regno}_certificate.docx")
+                cert_bytes = generate_certificate(name, regno, dept, year, section)
+                st.download_button("⬇️ Download Certificate", cert_bytes, file_name=f"{regno}_certificate.pdf")
         else:
             st.video(YOUTUBE_VIDEO_URL)
-            if st.button("I have watched the complete video"):
-                cert_bytes = generate_certificate(name, regno)
-                st.success("🎉 Video marked as complete. Your certificate is ready!")
-                st.download_button("⬇️ Download Certificate", cert_bytes, file_name=f"{regno}_certificate.docx")
-                try:
-                    send_email(email, name, regno, cert_bytes)
-                    st.success(f"📩 Certificate sent to {email}")
-                except:
-                    st.warning("⚠️ Failed to send email.")
-                progress[regno] = {
-                    "name": name,
-                    "email": email,
-                    "video_completed": True,
-                    "certificate_sent": True,
-                    "timestamp": str(datetime.datetime.now())
-                }
-                save_progress(progress)
+
+            # Timer setup (3 minutes = 180 seconds)
+            if "start_time" not in st.session_state:
+                st.session_state.start_time = datetime.datetime.now()
+
+            elapsed = (datetime.datetime.now() - st.session_state.start_time).seconds
+            remaining = max(0, 180 - elapsed)
+
+            # Countdown with progress bar
+            progress_percent = int(((180 - remaining) / 180) * 100)
+            st.progress(progress_percent)
+            st.write(f"⏳ Please watch the video. Button will appear in {remaining} seconds.")
+
+            if remaining <= 0:
+                if st.button("I have watched the complete video"):
+                    cert_bytes = generate_certificate(name, regno, dept, year, section)
+
+                    # Auto-download hack (show download immediately)
+                    st.download_button("⬇️ Download Certificate", cert_bytes, file_name=f"{regno}_certificate.pdf")
+
+                    # Auto-send email
+                    try:
+                        send_email(email, name, regno, cert_bytes)
+                        st.success(f"📩 Certificate sent to {email}")
+                    except:
+                        st.warning("⚠️ Failed to send email.")
+
+                    # Save progress
+                    progress[regno] = {
+                        "name": name,
+                        "email": email,
+                        "department": dept,
+                        "year": year,
+                        "section": section,
+                        "video_completed": True,
+                        "certificate_sent": True,
+                        "timestamp": str(datetime.datetime.now())
+                    }
+                    save_progress(progress)
     else:
         st.error("Registration number not found.")
