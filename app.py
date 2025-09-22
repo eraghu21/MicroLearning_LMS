@@ -12,7 +12,7 @@ from docx import Document
 
 # -------------------- Configuration --------------------
 BUFFER_SIZE = 64 * 1024
-AES_FILE = "Students_List.xlsx.aes"   # updated
+AES_FILE = "Students_List.xlsx (2).aes"   # updated filename
 PROGRESS_FILE = "progress.json"
 YOUTUBE_VIDEO_URL = "https://www.youtube.com/embed/dQw4w9WgXcQ"  # Replace with your video URL
 
@@ -39,17 +39,18 @@ def load_students_list():
         # Try AES decryption
         with open(AES_FILE, "rb") as fIn:
             decrypted = BytesIO()
-            pyAesCrypt.decryptStream(fIn, decrypted, password, BUFFER_SIZE, os.path.getsize(AES_FILE))
+            pyAesCrypt.decryptStream(
+                fIn, decrypted, password, BUFFER_SIZE, os.path.getsize(AES_FILE)
+            )
             decrypted.seek(0)
             df = pd.read_excel(decrypted)
-        return df
-    except Exception as e:
+    except Exception:
         # Fallback: try plain Excel if not AES
-        try:
-            return pd.read_excel(AES_FILE)
-        except Exception as e2:
-            st.error("❌ Failed to load students list. Ensure file is a valid Excel or AES-encrypted Excel.")
-            st.stop()
+        df = pd.read_excel(AES_FILE)
+
+    # 🔑 Ensure RegNo is always string for comparison
+    df["RegNo"] = df["RegNo"].astype(str).str.strip()
+    return df
 
 def load_progress():
     if not os.path.exists(PROGRESS_FILE):
