@@ -14,7 +14,7 @@ from docx import Document
 BUFFER_SIZE = 64 * 1024
 AES_FILE = "Students_List.xlsx.aes"   # updated filename
 PROGRESS_FILE = "progress.json"
-YOUTUBE_VIDEO_URL = "https://www.youtube.com/embed/dQw4w9WgXcQ"  # Replace with your video URL
+YOUTUBE_VIDEO_URL = "https://youtu.be/Tva_sr4BUfk?si=GukUUa-tY-VvYo73"  # Replace with your video URL
 
 # -------------------- Load Secrets --------------------
 # Fallback values if secrets are missing
