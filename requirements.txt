@@ -1,9 +1,8 @@
 streamlit
-pandas
 pyAesCrypt
-requests
-reportlab
+pandas
 openpyxl
-PyGithub
-secure-smtplib
+smtplib
+email-validator
+python-docx
 
