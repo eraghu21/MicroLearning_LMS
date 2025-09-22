@@ -1,217 +1,105 @@
+
 import streamlit as st
 import pandas as pd
 import pyAesCrypt
-import io
-import requests
-import time
+import os
 import json
-import smtplib
-from datetime import datetime
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
+import datetime
+from io import BytesIO
+from zipfile import ZipFile
 from email.message import EmailMessage
-from github import Github
+import smtplib
+from docx import Document
 
-# === CONFIG ===
-VIDEO_DURATION = 180  # in seconds (This will now be dynamically updated by YouTube API)
-bufferSize = 64 * 1024
-REPO_NAME = "eraghu21/MicroLearning_LMS"
-PROGRESS_FILE = "progress.json.aes"
-STUDENT_LIST_FILE = "Students_List.xlsx.aes"
-GITHUB_RAW_BASE = "https://raw.githubusercontent.com/eraghu21/MicroLearning_LMS/main/"
-YOUTUBE_VIDEO_ID = "dQw4w9WgXcQ" # The ID of the video to play
+# -------------------- Configuration --------------------
+BUFFER_SIZE = 64 * 1024
+AES_FILE = "students_list.aes"
+PROGRESS_FILE = "progress.json"
+YOUTUBE_VIDEO_URL = "https://www.youtube.com/embed/dQw4w9WgXcQ"  # Replace with your video URL
 
-# === SECRETS ===
-def get_secret(key):
-    try:
-        return st.secrets[key]
-    except KeyError:
-        st.error(f"❌ Missing secret: {key}. Please configure it in Streamlit secrets.")
-        st.stop()
+# -------------------- Load Secrets --------------------
+password = st.secrets["encryption"]["password"]
+email_sender = st.secrets["email"]["sender"]
+email_password = st.secrets["email"]["password"]
 
-password = get_secret("encryption_password")
-github_token = get_secret("github_token")
-email_sender = get_secret("email_sender")
-email_password = get_secret("email_password")
+# -------------------- Helper Functions --------------------
+@st.cache_data(show_spinner=False)
+def load_students_list():
+    with open(AES_FILE, "rb") as fIn:
+        decrypted = BytesIO()
+        pyAesCrypt.decryptStream(fIn, decrypted, password, BUFFER_SIZE, len(fIn.read()))
+        decrypted.seek(0)
+        df = pd.read_excel(decrypted)
+    return df
 
-# === LOAD ENCRYPTED EXCEL ===
-@st.cache_data
-def load_encrypted_excel(filename):
-    url = GITHUB_RAW_BASE + filename
-    response = requests.get(url)
-    if response.status_code != 200:
-        st.error(f"❌ Failed to fetch file from GitHub. Status: {response.status_code}")
-        st.stop()
-    encrypted_bytes = io.BytesIO(response.content)
-    decrypted_stream = io.BytesIO()
-    try:
-        pyAesCrypt.decryptStream(encrypted_bytes, decrypted_stream, password, bufferSize)
-        decrypted_stream.seek(0)
-        df = pd.read_excel(decrypted_stream)
-        return df
-    except Exception:
-        st.error("❌ Failed to decrypt student list. Check encryption password.")
-        st.stop()
-
-# === LOAD PROGRESS ===
-def load_encrypted_progress():
-    url = GITHUB_RAW_BASE + PROGRESS_FILE
-    response = requests.get(url)
-    if response.status_code != 200:
+def load_progress():
+    if not os.path.exists(PROGRESS_FILE):
         return {}
-    encrypted_bytes = io.BytesIO(response.content)
-    decrypted_stream = io.BytesIO()
-    try:
-        pyAesCrypt.decryptStream(encrypted_bytes, decrypted_stream, password, bufferSize)
-        decrypted_stream.seek(0)
-        return json.load(decrypted_stream)
-    except Exception:
-        st.error("❌ Failed to decrypt progress data. Check encryption password.")
-        return {}
+    with open(PROGRESS_FILE, "r") as f:
+        return json.load(f)
 
-# === SAVE PROGRESS ===
-def save_progress_to_github(progress_dict):
-    content = json.dumps(progress_dict, indent=4)
-    content_bytes = content.encode("utf-8")
-    f_in = io.BytesIO(content_bytes)
-    f_out = io.BytesIO()
-    pyAesCrypt.encryptStream(f_in, f_out, password, bufferSize)
-    f_out.seek(0)
-    g = Github(github_token)
-    repo = g.get_repo(REPO_NAME)
-    try:
-        contents = repo.get_contents(PROGRESS_FILE)
-        repo.update_file(contents.path, "Update progress", f_out.read(), contents.sha)
-    except Exception:
-        f_out.seek(0)
-        repo.create_file(PROGRESS_FILE, "Create progress file", f_out.read())
+def save_progress(progress):
+    with open(PROGRESS_FILE, "w") as f:
+        json.dump(progress, f, indent=4)
 
-# === CERTIFICATE GENERATION ===
-def generate_certificate(name, regno, dept, year, section):
-    filename = f"certificate_{regno}.pdf"
-    c = canvas.Canvas(filename, pagesize=A4)
-    c.setFont("Helvetica-Bold", 24)
-    c.drawCentredString(300, 750, "Certificate of Completion")
-    c.setFont("Helvetica", 14)
-    c.drawCentredString(300, 700, "This is to certify that")
-    c.setFont("Helvetica-Bold", 18)
-    c.drawCentredString(300, 670, f"{name} (RegNo: {regno})")
-    c.setFont("Helvetica", 14)
-    c.drawCentredString(300, 640, f"from {dept} - Year {year} - Section {section}")
-    c.drawCentredString(300, 610, "has successfully completed the microlearning module.")
-    c.setFont("Helvetica", 12)
-    c.drawCentredString(300, 570, f"Issued on: {datetime.today().strftime("%d-%m-%Y")}")
-    c.showPage()
-    c.save()
-    return filename
+def generate_certificate(name, regno):
+    doc = Document()
+    doc.add_heading("Certificate of Completion", 0)
+    doc.add_paragraph(f"This is to certify that {name} ({regno}) has successfully completed the video.")
+    doc.add_paragraph(f"Date: {datetime.date.today()}")
+    output = BytesIO()
+    doc.save(output)
+    return output.getvalue()
 
-# === EMAIL SENDER ===
-def send_certificate(email, name, regno, cert_path):
+def send_email(to, name, regno, cert_bytes):
     msg = EmailMessage()
-    msg["Subject"] = "Your Microlearning Certificate"
-    msg["From"] = email_sender
-    msg["To"] = email
-    msg.set_content(f"Dear {name},\n\nCongratulations on completing the microlearning module!\n\nAttached is your certificate.\n\nRegards,\nTeam")
+    msg['Subject'] = "Your Certificate of Completion"
+    msg['From'] = email_sender
+    msg['To'] = to
+    msg.set_content(f"Dear {name},\n\nCongratulations! Your certificate is attached.\n\nRegards,\nAdmin")
+    msg.add_attachment(cert_bytes, maintype='application', subtype='vnd.openxmlformats-officedocument.wordprocessingml.document', filename=f"{regno}_certificate.docx")
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+        smtp.login(email_sender, email_password)
+        smtp.send_message(msg)
 
-    with open(cert_path, "rb") as f:
-        cert_data = f.read()
-    msg.add_attachment(cert_data, maintype="application", subtype="pdf", filename=f"certificate_{regno}.pdf")
+# -------------------- Streamlit App --------------------
+st.title("🎓 Microlearning Certificate Portal")
 
-    try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-            smtp.login(email_sender, email_password)
-            smtp.send_message(msg)
-        return True
-    except Exception as e:
-        st.error(f"❌ Failed to send email: {e}")
-        return False
-
-# === STREAMLIT APP ===
-st.set_page_config(page_title="🎓 Microlearning LMS", layout="centered")
-st.title("🎓 Microlearning Platform")
-
-df_students = load_encrypted_excel(STUDENT_LIST_FILE)
-df_students["RegNo"] = df_students["RegNo"].astype(str).str.strip().str.upper()
-progress_data = load_encrypted_progress()
-
-# === LOGIN ===
-st.subheader("🔐 Student Login")
-regno = st.text_input("Enter your Registration Number:").strip().upper()
+regno = st.text_input("Enter your Registration Number").strip().upper()
 
 if regno:
-    student = df_students[df_students["RegNo"] == regno]
-    if student.empty:
-        st.error("❌ Registration number not found!")
-    else:
-        student = student.iloc[0]
-        st.success(f"Welcome **{student["Name"]}**!")
-
-        already_completed = progress_data.get(regno, {}).get("completed", False)
-
-        if not already_completed:
-            # Embed YouTube video using iframe and JavaScript API
-            st.components.v1.html(f"""
-                <div id=\'player\'></div>
-                <script>
-                  var tag = document.createElement(\'script\');
-                  tag.src = "https://www.youtube.com/iframe_api";
-                  var firstScriptTag = document.getElementsByTagName(\'script\')[0];
-                  firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-
-                  var player;
-                  function onYouTubeIframeAPIReady() {{
-                    player = new YT.Player(\'player\', {{
-                      height: \'360\',
-                      width: \'640\',
-                      videoId: \'{YOUTUBE_VIDEO_ID}\,',
-                      events: {{
-                        \'onReady\': onPlayerReady,
-                        \'onStateChange\': onPlayerStateChange
-                      }}
-                    }});
-                  }}
-
-                  function onPlayerReady(event) {{
-                    // You can add any on-ready logic here if needed
-                  }}
-
-                  function onPlayerStateChange(event) {{
-                    if (event.data == YT.PlayerState.ENDED) {{
-                      // Send a message to Streamlit when the video ends
-                      window.parent.postMessage({{
-                        type: \'streamlit:setComponentValue\',
-                        value: {{ video_ended: true }}
-                      }}, \'*
-                      \');
-                    }}
-                  }}
-                </script>
-                """.format(YOUTUBE_VIDEO_ID=YOUTUBE_VIDEO_ID), height=400)
-
-            # Check for the video ended message from JavaScript
-            video_ended = st.session_state.get("video_ended", False)
-
-            if video_ended:
-                cert_file = generate_certificate(
-                    student["Name"], regno, student["Dept"], student["Year"], student["Section"]
-                )
-                sent = send_certificate(student["Email"], student["Name"], regno, cert_file)
-                if sent:
-                    progress_data[regno] = {
-                        "name": student["Name"],
-                        "completed": True,
-                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    }
-                    save_progress_to_github(progress_data)
-                    st.success("🎉 Video completed! Certificate emailed and ready to download.")
-                    with open(cert_file, "rb") as f:
-                        st.download_button("⬇️ Download Certificate", f, file_name=cert_file)
+    students_df = load_students_list()
+    student = students_df[students_df["RegNo"] == regno]
+    if not student.empty:
+        name = student.iloc[0]["Name"]
+        email = student.iloc[0]["Email"]
+        st.success(f"Welcome, {name}!")
+        progress = load_progress()
+        record = progress.get(regno, {})
+        
+        if record.get("video_completed"):
+            st.info("✅ You have already completed the video.")
+            if st.button("Download Certificate Again"):
+                cert_bytes = generate_certificate(name, regno)
+                st.download_button("⬇️ Download Certificate", cert_bytes, file_name=f"{regno}_certificate.docx")
         else:
-            st.info("✅ Already completed. You can download your certificate.")
-            cert_file = generate_certificate(
-                student["Name"], regno, student["Dept"], student["Year"], student["Section"]
-            )
-            with open(cert_file, "rb") as f:
-                st.download_button("⬇️ Download Certificate", f, file_name=cert_file)
-
-
+            st.video(YOUTUBE_VIDEO_URL)
+            if st.button("I have watched the complete video"):
+                cert_bytes = generate_certificate(name, regno)
+                st.success("🎉 Video marked as complete. Your certificate is ready!")
+                st.download_button("⬇️ Download Certificate", cert_bytes, file_name=f"{regno}_certificate.docx")
+                try:
+                    send_email(email, name, regno, cert_bytes)
+                    st.success(f"📩 Certificate sent to {email}")
+                except:
+                    st.warning("⚠️ Failed to send email.")
+                progress[regno] = {
+                    "name": name,
+                    "email": email,
+                    "video_completed": True,
+                    "certificate_sent": True,
+                    "timestamp": str(datetime.datetime.now())
+                }
+                save_progress(progress)
+    else:
+        st.error("Registration number not found.")
