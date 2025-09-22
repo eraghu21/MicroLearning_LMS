@@ -13,7 +13,7 @@ from docx import Document
 
 # -------------------- Configuration --------------------
 BUFFER_SIZE = 64 * 1024
-AES_FILE = "students_list.aes"
+AES_FILE = "Students_List.xlsx.aes"
 PROGRESS_FILE = "progress.json"
 YOUTUBE_VIDEO_URL = "https://www.youtube.com/embed/dQw4w9WgXcQ"  # Replace with your video URL
 
