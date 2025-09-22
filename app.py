@@ -106,7 +106,7 @@ if regno:
     if not student.empty:
         name = student.iloc[0]["Name"]
         email = student.iloc[0]["Email"]
-        dept = student.iloc[0]["Department"]
+        dept = student.iloc[0]["Dept"]
         year = student.iloc[0]["Year"]
         section = student.iloc[0]["Section"]
 
