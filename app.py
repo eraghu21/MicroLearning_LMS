@@ -67,7 +67,7 @@ st.title("🎓 Microlearning Certificate Portal")
 regno = st.text_input("Enter your Registration Number").strip().upper()
 
 if regno:
-    students_df = load_students_list()
+    students_df = load_Students_List.xlsx (2)()
     student = students_df[students_df["RegNo"] == regno]
     if not student.empty:
         name = student.iloc[0]["Name"]
