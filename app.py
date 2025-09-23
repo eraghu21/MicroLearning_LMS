@@ -8,7 +8,6 @@ import datetime
 from io import BytesIO
 from zipfile import ZipFile
 from email.message import EmailMessage
-import smtplib
 from docx import Document
 
 # -------------------- Configuration --------------------
