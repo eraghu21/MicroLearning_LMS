@@ -3,3 +3,4 @@ pandas
 pyAesCrypt
 reportlab
 openpyxl
+PyGithub
