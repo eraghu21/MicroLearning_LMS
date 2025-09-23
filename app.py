@@ -2,172 +2,163 @@ import streamlit as st
 import pandas as pd
 import pyAesCrypt
 import os
-import io
-from datetime import datetime
+import json
+import datetime
+from io import BytesIO
+from email.message import EmailMessage
+import smtplib
 from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-from github import Github  # ⬅ NEW
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
 
-# === Constants ===
+# -------------------- Configuration --------------------
 BUFFER_SIZE = 64 * 1024
-AES_FILE = "Students_List.aes"
-PROGRESS_FILE = "progress.csv"
-VIDEO_URL = "https://www.youtube.com/embed/Tva_sr4BUfk"  # 🔁 Replace with your embed link
-CERTIFICATE_DIR = "certificates"
+AES_FILE = "Students_List.xlsx.aes"
+PROGRESS_FILE = "progress.json"
+YOUTUBE_VIDEO_URL = "https://youtu.be/Tva_sr4BUfk?si=yMyH42aIHqCIFxHL"
 
-# Ensure certificate directory exists
-os.makedirs(CERTIFICATE_DIR, exist_ok=True)
+# -------------------- Load Secrets --------------------
+password = None
+email_sender = None
+email_password = None
 
-# === Load student data from AES-encrypted Excel file ===
-@st.cache_data
-def load_student_data(password):
+try:
+    password = st.secrets["encryption"]["password"]
+    email_sender = st.secrets["email"]["sender"]
+    email_password = st.secrets["email"]["password"]
+except Exception:
+    password = "yourpassword"
+    email_sender = "youremail@gmail.com"
+    email_password = "your-email-app-password"
+
+# -------------------- Helper Functions --------------------
+@st.cache_data(show_spinner=False)
+def load_students_list():
     try:
         with open(AES_FILE, "rb") as fIn:
-            decrypted = io.BytesIO()
-            pyAesCrypt.decryptStream(fIn, decrypted, password, BUFFER_SIZE, len(fIn.read()))
+            decrypted = BytesIO()
+            pyAesCrypt.decryptStream(
+                fIn, decrypted, password, BUFFER_SIZE, os.path.getsize(AES_FILE)
+            )
             decrypted.seek(0)
             df = pd.read_excel(decrypted)
-            return df
     except Exception:
-        st.error("❌ Error decrypting the file. Check password or file format.")
-        return None
+        df = pd.read_excel(AES_FILE)
 
-# === Load / Save Progress ===
+    df["RegNo"] = df["RegNo"].astype(str).str.strip()
+    return df
+
 def load_progress():
-    if os.path.exists(PROGRESS_FILE):
-        return pd.read_csv(PROGRESS_FILE)
-    else:
-        return pd.DataFrame(columns=["RegNo", "Name", "Dept", "Year", "Section", "Video_Status", "Certificate_Status", "Timestamp"])
+    if not os.path.exists(PROGRESS_FILE):
+        return {}
+    with open(PROGRESS_FILE, "r") as f:
+        return json.load(f)
 
-def save_progress(progress_df):
-    progress_df.to_csv(PROGRESS_FILE, index=False)
+def save_progress(progress):
+    with open(PROGRESS_FILE, "w") as f:
+        json.dump(progress, f, indent=4)
 
-# === Upload progress.csv to GitHub ===
-def upload_to_github(file_path, repo_name, branch="main"):
-    try:
-        token = st.secrets["github"]["token"]   # store in Streamlit Secrets
-        g = Github(token)
-        repo = g.get_repo(repo_name)
-
-        with open(file_path, "r", encoding="utf-8") as f:
-            content = f.read()
-
-        try:
-            contents = repo.get_contents(file_path, ref=branch)
-            repo.update_file(contents.path, "Update progress.csv", content, contents.sha, branch=branch)
-        except Exception:
-            repo.create_file(file_path, "Add progress.csv", content, branch=branch)
-
-        st.sidebar.success("✅ Progress saved to GitHub successfully.")
-    except Exception as e:
-        st.sidebar.error(f"⚠️ GitHub upload failed: {e}")
-
-# === Generate Certificate ===
 def generate_certificate(name, regno, dept, year, section):
-    file_path = os.path.join(CERTIFICATE_DIR, f"{name}_{regno}.pdf")
-    c = canvas.Canvas(file_path, pagesize=A4)
+    """Generate PDF certificate with department, year, section"""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    styles = getSampleStyleSheet()
+    story = []
 
-    # Title
-    c.setFont("Helvetica-Bold", 24)
-    c.drawCentredString(300, 780, "Certificate of Completion")
+    story.append(Paragraph("<b>Certificate of Completion</b>", styles['Title']))
+    story.append(Spacer(1, 30))
+    story.append(Paragraph(
+        f"This is to certify that <b>{name}</b> ({regno}), "
+        f"Department of <b>{dept}</b>, Year: <b>{year}</b>, Section: <b>{section}</b> "
+        f"has successfully completed the video.", styles['Normal']
+    ))
+    story.append(Spacer(1, 20))
+    story.append(Paragraph(f"Date: {datetime.date.today()}", styles['Normal']))
 
-    # Main Text
-    c.setFont("Helvetica", 16)
-    c.drawCentredString(300, 740, f"This is to certify that")
-    c.setFont("Helvetica-Bold", 18)
-    c.drawCentredString(300, 710, f"{name} (Reg.No: {regno})")
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
 
-    # Additional details
-    c.setFont("Helvetica", 14)
-    c.drawCentredString(300, 670, f"Department: {dept}")
-    c.drawCentredString(300, 650, f"Year: {year}   |   Section: {section}")
+def send_email(to, name, regno, cert_bytes):
+    if not email_sender or not email_password:
+        st.warning("⚠️ Email credentials not configured. Skipping email send.")
+        return
+    msg = EmailMessage()
+    msg['Subject'] = "Your Certificate of Completion"
+    msg['From'] = email_sender
+    msg['To'] = to
+    msg.set_content(f"Dear {name},\n\nCongratulations! Your certificate is attached.\n\nRegards,\nAdmin")
+    msg.add_attachment(cert_bytes, maintype='application',
+                       subtype='pdf',
+                       filename=f"{regno}_certificate.pdf")
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+        smtp.login(email_sender, email_password)
+        smtp.send_message(msg)
 
-    # Completion text
-    c.setFont("Helvetica", 14)
-    c.drawCentredString(300, 610, "has successfully completed the training session.")
+# -------------------- Streamlit App --------------------
+st.title("🎓 Microlearning Certificate Portal")
 
-    # Date & Timestamp
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    c.drawCentredString(300, 580, f"Issued on: {timestamp}")
+regno = st.text_input("Enter your Registration Number").strip().upper()
 
-    c.save()
-    return file_path
+if regno:
+    students_df = load_students_list()
+    student = students_df[students_df["RegNo"] == regno]
+    if not student.empty:
+        name = student.iloc[0]["Name"]
+        email = student.iloc[0]["Email"]
+        dept = student.iloc[0]["Dept"]
+        year = student.iloc[0]["Year"]
+        section = student.iloc[0]["Section"]
 
-# === Main App ===
-def main():
-    st.title("🎓 LMS App – Video Learning & Certificate")
+        st.success(f"Welcome, {name} ({dept}, Year {year}, Section {section})")
+        progress = load_progress()
+        record = progress.get(regno, {})
 
-    # Admin Panel (Sidebar)
-    st.sidebar.header("Admin Panel")
-    password = st.sidebar.text_input("🔐 Enter AES Password", type="password")
-    uploaded_file = st.sidebar.file_uploader("📤 Upload Encrypted Excel (.aes)", type="aes")
-    repo_name = st.sidebar.text_input("📂 GitHub Repo (e.g., username/repo)")
-    branch = st.sidebar.text_input("🌿 Branch", value="main")
+        if record.get("video_completed"):
+            st.info("✅ You have already completed the video.")
+            if st.button("Download Certificate Again"):
+                cert_bytes = generate_certificate(name, regno, dept, year, section)
+                st.download_button("⬇️ Download Certificate", cert_bytes, file_name=f"{regno}_certificate.pdf")
+        else:
+            st.video(YOUTUBE_VIDEO_URL)
 
-    if uploaded_file and password:
-        # Save uploaded AES file
-        with open(AES_FILE, "wb") as f:
-            f.write(uploaded_file.getbuffer())
+            # Timer setup (3 minutes = 180 seconds)
+            if "start_time" not in st.session_state:
+                st.session_state.start_time = datetime.datetime.now()
 
-        # Load student list
-        students_df = load_student_data(password)
-        if students_df is not None:
-            st.success("✅ Student data loaded successfully!")
+            elapsed = (datetime.datetime.now() - st.session_state.start_time).seconds
+            remaining = max(0, 180 - elapsed)
 
-            # Student Login
-            regno = st.text_input("Enter your Registration Number to login:")
+            # Countdown with progress bar
+            progress_percent = int(((180 - remaining) / 180) * 100)
+            st.progress(progress_percent)
+            st.write(f"⏳ Please watch the video. Button will appear in {remaining} seconds.")
 
-            if regno:
-                student = students_df[students_df["RegNo"] == regno]
-                if student.empty:
-                    st.error("❌ Invalid Registration Number.")
-                else:
-                    name = student.iloc[0]["Name"]
-                    dept = student.iloc[0]["Dept"]
-                    year = student.iloc[0]["Year"]
-                    section = student.iloc[0]["Section"]
+            if remaining <= 0:
+                if st.button("I have watched the complete video"):
+                    cert_bytes = generate_certificate(name, regno, dept, year, section)
 
-                    st.success(f"Welcome, {name} ({dept}, Year {year}, Section {section})")
+                    # Auto-download hack (show download immediately)
+                    st.download_button("⬇️ Download Certificate", cert_bytes, file_name=f"{regno}_certificate.pdf")
 
-                    # Load progress
-                    progress_df = load_progress()
-                    existing = progress_df[progress_df["RegNo"] == regno]
+                    # Auto-send email
+                    try:
+                        send_email(email, name, regno, cert_bytes)
+                        st.success(f"📩 Certificate sent to {email}")
+                    except:
+                        st.warning("⚠️ Failed to send email.")
 
-                    # Already watched → allow certificate
-                    if not existing.empty and existing.iloc[0]["Video_Status"] == "Completed":
-                        st.info("✅ You already watched the video. You can download your certificate.")
-                        cert_path = os.path.join(CERTIFICATE_DIR, f"{name}_{regno}.pdf")
-                        if not os.path.exists(cert_path):
-                            cert_path = generate_certificate(name, regno, dept, year, section)
-                        with open(cert_path, "rb") as f:
-                            st.download_button("📄 Download Your Certificate", f, file_name=os.path.basename(cert_path))
-
-                    # New / Not completed → show video
-                    else:
-                        st.video(VIDEO_URL)
-                        if st.button("✅ Mark as Watched"):
-                            cert_path = generate_certificate(name, regno, dept, year, section)
-                            new_record = {
-                                "RegNo": regno,
-                                "Name": name,
-                                "Dept": dept,
-                                "Year": year,
-                                "Section": section,
-                                "Video_Status": "Completed",
-                                "Certificate_Status": "Downloaded",
-                                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            }
-                            # Remove old record if exists
-                            progress_df = progress_df[progress_df["RegNo"] != regno]
-                            progress_df = pd.concat([progress_df, pd.DataFrame([new_record])], ignore_index=True)
-                            save_progress(progress_df)
-
-                            # Upload to GitHub
-                            if repo_name:
-                                upload_to_github(PROGRESS_FILE, repo_name, branch)
-
-                            with open(cert_path, "rb") as f:
-                                st.download_button("📄 Download Your Certificate", f, file_name=os.path.basename(cert_path))
-
-if __name__ == "__main__":
-    main()
+                    # Save progress
+                    progress[regno] = {
+                        "name": name,
+                        "email": email,
+                        "department": dept,
+                        "year": year,
+                        "section": section,
+                        "video_completed": True,
+                        "certificate_sent": True,
+                        "timestamp": str(datetime.datetime.now())
+                    }
+                    save_progress(progress)
+    else:
+        st.error("Registration number not found.")
