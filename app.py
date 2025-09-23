@@ -1,104 +1,124 @@
-
 import streamlit as st
 import pandas as pd
 import pyAesCrypt
 import os
-import json
-import datetime
-from io import BytesIO
-from zipfile import ZipFile
-from email.message import EmailMessage
-from docx import Document
+import io
+from datetime import datetime
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
 
-# -------------------- Configuration --------------------
+# === Configuration ===
 BUFFER_SIZE = 64 * 1024
-AES_FILE = "students_list.xlsx.aes"
-PROGRESS_FILE = "progress.xlsx"
-YOUTUBE_VIDEO_URL = "https://www.youtube.com/embed/dQw4w9WgXcQ"  # Replace with your video URL
+AES_FILE = "Students_List.aes"
+PROGRESS_FILE = "progress.csv"
+CERT_DIR = "certificates"
+VIDEO_URL = "https://www.youtube.com/embed/YOUR_VIDEO_ID"  # Replace with your actual video link
 
-# -------------------- Load Secrets --------------------
-password = st.secrets["encryption"]["password"]
-email_sender = st.secrets["email"]["sender"]
-email_password = st.secrets["email"]["password"]
+# === Ensure certificate directory exists ===
+os.makedirs(CERT_DIR, exist_ok=True)
 
-# -------------------- Helper Functions --------------------
-@st.cache_data(show_spinner=False)
-def load_students_list():
-    with open(AES_FILE, "rb") as fIn:
-        decrypted = BytesIO()
-        pyAesCrypt.decryptStream(fIn, decrypted, password, BUFFER_SIZE, len(fIn.read()))
-        decrypted.seek(0)
-        df = pd.read_excel(decrypted)
-    return df
+# === Decrypt and Load Student Data ===
+@st.cache_data
+def load_student_data(password):
+    try:
+        with open(AES_FILE, "rb") as f:
+            decrypted = io.BytesIO()
+            pyAesCrypt.decryptStream(f, decrypted, password, BUFFER_SIZE, len(f.read()))
+            decrypted.seek(0)
+            df = pd.read_excel(decrypted)
+            return df
+    except Exception as e:
+        st.error("❌ Failed to decrypt file. Check password or file format.")
+        return None
 
+# === Load Progress File ===
 def load_progress():
-    if not os.path.exists(PROGRESS_FILE):
-        return {}
-    with open(PROGRESS_FILE, "r") as f:
-        return json.load(f)
-
-def save_progress(progress):
-    with open(PROGRESS_FILE, "w") as f:
-        json.dump(progress, f, indent=4)
-
-def generate_certificate(name, regno):
-    doc = Document()
-    doc.add_heading("Certificate of Completion", 0)
-    doc.add_paragraph(f"This is to certify that {name} ({regno}) has successfully completed the video.")
-    doc.add_paragraph(f"Date: {datetime.date.today()}")
-    output = BytesIO()
-    doc.save(output)
-    return output.getvalue()
-
-def send_email(to, name, regno, cert_bytes):
-    msg = EmailMessage()
-    msg['Subject'] = "Your Certificate of Completion"
-    msg['From'] = email_sender
-    msg['To'] = to
-    msg.set_content(f"Dear {name},\n\nCongratulations! Your certificate is attached.\n\nRegards,\nAdmin")
-    msg.add_attachment(cert_bytes, maintype='application', subtype='vnd.openxmlformats-officedocument.wordprocessingml.document', filename=f"{regno}_certificate.docx")
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
-        smtp.login(email_sender, email_password)
-        smtp.send_message(msg)
-
-# -------------------- Streamlit App --------------------
-st.title("🎓 Microlearning Certificate Portal")
-
-regno = st.text_input("Enter your Registration Number").strip().upper()
-
-if regno:
-    students_df = load_students_list()
-    student = students_df[students_df["RegNo"] == regno]
-    if not student.empty:
-        name = student.iloc[0]["Name"]
-        email = student.iloc[0]["Email"]
-        st.success(f"Welcome, {name}!")
-        progress = load_progress()
-        record = progress.get(regno, {})
-        
-        if record.get("video_completed"):
-            st.info("✅ You have already completed the video.")
-            if st.button("Download Certificate Again"):
-                cert_bytes = generate_certificate(name, regno)
-                st.download_button("⬇️ Download Certificate", cert_bytes, file_name=f"{regno}_certificate.docx")
-        else:
-            st.video(YOUTUBE_VIDEO_URL)
-            if st.button("I have watched the complete video"):
-                cert_bytes = generate_certificate(name, regno)
-                st.success("🎉 Video marked as complete. Your certificate is ready!")
-                st.download_button("⬇️ Download Certificate", cert_bytes, file_name=f"{regno}_certificate.docx")
-                try:
-                    send_email(email, name, regno, cert_bytes)
-                    st.success(f"📩 Certificate sent to {email}")
-                except:
-                    st.warning("⚠️ Failed to send email.")
-                progress[regno] = {
-                    "name": name,
-                    "email": email,
-                    "video_completed": True,
-                    "certificate_sent": True,
-                    "timestamp": str(datetime.datetime.now())
-                }
-                save_progress(progress)
+    if os.path.exists(PROGRESS_FILE):
+        return pd.read_csv(PROGRESS_FILE)
     else:
-        st.error("Registration number not found.")
+        return pd.DataFrame(columns=["RegNo", "Name", "Video_Status", "Certificate_Status", "Timestamp"])
+
+# === Save Progress ===
+def save_progress(df):
+    df.to_csv(PROGRESS_FILE, index=False)
+
+# === Generate Certificate PDF ===
+def generate_certificate(name, regno):
+    file_path = os.path.join(CERT_DIR, f"{name}_{regno}.pdf")
+    c = canvas.Canvas(file_path, pagesize=A4)
+    c.setFont("Helvetica-Bold", 20)
+    c.drawCentredString(300, 750, "Certificate of Completion")
+    c.setFont("Helvetica", 14)
+    c.drawCentredString(300, 700, f"This is to certify that {name}")
+    c.drawCentredString(300, 675, f"Reg No: {regno}")
+    c.drawCentredString(300, 640, "has successfully completed the video session.")
+    c.drawCentredString(300, 610, f"Date: {datetime.today().strftime('%Y-%m-%d')}")
+    c.save()
+    return file_path
+
+# === Main App ===
+def main():
+    st.title("🎓 LMS App – Video Learning with Certificate")
+    st.sidebar.header("🔐 Admin Panel")
+    
+    password = st.sidebar.text_input("Enter AES Password", type="password")
+    uploaded_file = st.sidebar.file_uploader("Upload Encrypted Excel (.aes)", type="aes")
+
+    if uploaded_file and password:
+        with open(AES_FILE, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+
+        student_df = load_student_data(password)
+
+        if student_df is not None:
+            st.success("✅ Student data loaded successfully!")
+
+            regno = st.text_input("Enter your Registration Number to login:")
+
+            if regno:
+                student = student_df[student_df["RegNo"] == regno]
+
+                if student.empty:
+                    st.error("❌ Invalid Registration Number.")
+                    return
+
+                name = student.iloc[0]["Name"]
+                st.success(f"Welcome, {name}!")
+
+                # Load and check progress
+                progress_df = load_progress()
+                record = progress_df[progress_df["RegNo"] == regno]
+
+                if not record.empty and record.iloc[0]["Video_Status"] == "Completed":
+                    st.info("✅ You already completed the video. Certificate is available.")
+
+                    cert_file = os.path.join(CERT_DIR, f"{name}_{regno}.pdf")
+                    if not os.path.exists(cert_file):
+                        cert_file = generate_certificate(name, regno)
+
+                    with open(cert_file, "rb") as f:
+                        st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file))
+                else:
+                    # Show video
+                    st.video(VIDEO_URL)
+                    if st.button("✅ Mark as Watched"):
+                        cert_file = generate_certificate(name, regno)
+
+                        # Update or add progress
+                        progress_df = progress_df[progress_df["RegNo"] != regno]
+                        new_record = {
+                            "RegNo": regno,
+                            "Name": name,
+                            "Video_Status": "Completed",
+                            "Certificate_Status": "Downloaded",
+                            "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                        progress_df = pd.concat([progress_df, pd.DataFrame([new_record])], ignore_index=True)
+                        save_progress(progress_df)
+
+                        with open(cert_file, "rb") as f:
+                            st.success("🎉 Congratulations! Certificate ready.")
+                            st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file))
+
+if __name__ == "__main__":
+    main()
