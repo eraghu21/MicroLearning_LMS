@@ -126,9 +126,9 @@ def show_video_with_timer(video_url, video_duration_sec):
                 if(timeLeft <= 0) {{
                     clearInterval(countdown);
                     timerText.innerHTML = "✅ You have finished the video. You can click the button below.";
-                    
+
                     const el = document.createElement("input");
-                    el.type = "text";
+                    el.type = "hidden";
                     el.id = "video_done";
                     el.value = "done";
                     document.body.appendChild(el);
@@ -172,9 +172,14 @@ def main():
 
             show_video_with_timer(VIDEO_URL, VIDEO_DURATION)
 
-            video_done = st.text_input("video_done", value="", key="video_done")
-            if video_done == "done":
-                st.session_state.video_finished = True
+            # Detect JS hidden input automatically
+            try:
+                from streamlit_javascript import st_javascript
+                js_done = st_javascript("document.getElementById('video_done')?.value")
+                if js_done == "done":
+                    st.session_state.video_finished = True
+            except:
+                pass
 
             if st.session_state.video_finished:
                 if st.button("✅ I have watched the video"):
