@@ -12,27 +12,32 @@ BUFFER_SIZE = 64 * 1024
 CERT_DIR = "certificates"
 os.makedirs(CERT_DIR, exist_ok=True)
 
-VIDEO_URL = "https://www.youtube.com/embed/YOUR_VIDEO_ID"  # Replace with your YouTube embed link
-AES_FILE = st.secrets["aes"]["file"]
-AES_PASSWORD = st.secrets["aes"]["password"]
+VIDEO_URL = "https://www.youtube.com/embed/YOUR_VIDEO_ID"  # Replace with your actual YouTube embed ID
+AES_FILE = st.secrets["aes"]["file"]        
+AES_PASSWORD = st.secrets["aes"]["password"] 
 
-# === Decrypt Excel File ===
+# === Load and decrypt student list ===
+@st.cache_data(show_spinner=True)
 def load_students():
     try:
         decrypted = io.BytesIO()
         with open(AES_FILE, "rb") as f:
-            f.seek(0, os.SEEK_END)
+            f.seek(0, 2)
             file_len = f.tell()
             f.seek(0)
             pyAesCrypt.decryptStream(f, decrypted, AES_PASSWORD, BUFFER_SIZE, file_len)
         decrypted.seek(0)
         df = pd.read_excel(decrypted)
+
+        # Convert RegNo to string and strip spaces
+        df["RegNo"] = df["RegNo"].astype(str).str.strip()
+        df["Name"] = df["Name"].astype(str).str.strip()
         return df
     except Exception as e:
         st.error(f"❌ Failed to decrypt student file: {e}")
         return None
 
-# === Certificate Generator ===
+# === Generate certificate ===
 def generate_certificate(name, regno):
     file_path = os.path.join(CERT_DIR, f"{name}_{regno}.pdf")
     c = canvas.Canvas(file_path, pagesize=A4)
@@ -54,7 +59,7 @@ def main():
     if student_df is None:
         return
 
-    regno = st.text_input("Enter your Registration Number:")
+    regno = st.text_input("Enter your Registration Number:").strip()
 
     if regno:
         student = student_df[student_df["RegNo"] == regno]
