@@ -6,6 +6,7 @@ import io
 import os
 from datetime import datetime
 import base64
+import requests
 
 # ====================== EMBEDDED CERTIFICATE BACKGROUND ======================
 certificate_base64 = """
@@ -35,11 +36,14 @@ os.makedirs(CERT_DIR, exist_ok=True)
 VIDEO_URL = "https://www.youtube.com/embed/YOUR_VIDEO_ID"  # Replace with your video
 VIDEO_DURATION = 30  # Video duration in seconds
 
-AES_FILE = st.secrets["aes"]["file"]           # AES encrypted student file
-AES_PASSWORD = st.secrets["aes"]["password"]   # AES password
+AES_FILE = st.secrets["aes"]["file"]           
+AES_PASSWORD = st.secrets["aes"]["password"]  
 
-PROGRESS_FILE = "progress.csv"
-ADMIN_PASSWORD = st.secrets["admin"]["password"]  # Admin view password
+ADMIN_PASSWORD = st.secrets["admin"]["password"]  
+
+GITHUB_TOKEN = st.secrets["github"]["token"]
+REPO = st.secrets["github"]["repo"]
+PROGRESS_FILE = st.secrets["github"]["progress_file"]
 
 # ====================== LOAD STUDENTS ======================
 @st.cache_data(show_spinner=True)
@@ -59,6 +63,34 @@ def load_students():
     except Exception as e:
         st.error(f"❌ Failed to load/decrypt student file: {e}")
         return None
+
+# ====================== GITHUB PROGRESS ======================
+def load_progress_from_github():
+    url = f"https://raw.githubusercontent.com/{REPO}/main/{PROGRESS_FILE}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return pd.read_csv(io.BytesIO(response.content), dtype={"RegNo": str})
+    else:
+        return pd.DataFrame(columns=["RegNo", "Name", "Video_Status", "Certificate_Status", "Timestamp"])
+
+def upload_progress_to_github(df):
+    csv_data = df.to_csv(index=False).encode()
+    b64_data = base64.b64encode(csv_data).decode()
+    url = f"https://api.github.com/repos/{REPO}/contents/{PROGRESS_FILE}"
+
+    get_resp = requests.get(url, headers={"Authorization": f"token {GITHUB_TOKEN}"})
+    sha = get_resp.json()["sha"] if get_resp.status_code == 200 else None
+
+    payload = {
+        "message": f"Update progress - {datetime.now().isoformat()}",
+        "content": b64_data,
+        "branch": "main"
+    }
+    if sha:
+        payload["sha"] = sha
+
+    put_resp = requests.put(url, json=payload, headers={"Authorization": f"token {GITHUB_TOKEN}"})
+    return put_resp.status_code in [200, 201]
 
 # ====================== GENERATE CERTIFICATE ======================
 def generate_certificate(name, regno):
@@ -88,14 +120,13 @@ def generate_certificate(name, regno):
     except ModuleNotFoundError:
         from reportlab.pdfgen import canvas
         from reportlab.lib.pagesizes import A4
-        from PIL import Image
-        from reportlab.lib.utils import ImageReader
         width, height = A4
         c = canvas.Canvas(file_path, pagesize=A4)
         if BG_IMAGE_PATH:
+            from PIL import Image
+            from reportlab.lib.utils import ImageReader
             img = Image.open(BG_IMAGE_PATH)
-            img_reader = ImageReader(img)
-            c.drawImage(img_reader, 0, 0, width=width, height=height)
+            c.drawImage(ImageReader(img), 0, 0, width=width, height=height)
         c.setFont("Helvetica-Bold", 20)
         c.drawCentredString(width/2, height-100, "Certificate of Completion")
         c.setFont("Helvetica", 14)
@@ -106,24 +137,7 @@ def generate_certificate(name, regno):
         c.save()
     return file_path
 
-# ====================== PROGRESS LOG ======================
-def update_progress(regno, name):
-    if os.path.exists(PROGRESS_FILE):
-        df = pd.read_csv(PROGRESS_FILE)
-    else:
-        df = pd.DataFrame(columns=["RegNo", "Name", "Video_Status", "Certificate_Status", "Timestamp"])
-    df = df[df["RegNo"] != regno]
-    new_row = {
-        "RegNo": regno,
-        "Name": name,
-        "Video_Status": "Completed",
-        "Certificate_Status": "Downloaded",
-        "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    }
-    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-    df.to_csv(PROGRESS_FILE, index=False)
-
-# ====================== VIDEO WITH TIMER ======================
+# ====================== VIDEO ======================
 def show_video_with_timer(video_url, duration_sec):
     html_code = f"""
     <div>
@@ -149,62 +163,75 @@ def show_video_with_timer(video_url, duration_sec):
     """
     components.html(html_code, height=500, scrolling=True)
 
-# ====================== MAIN APP ======================
+# ====================== MAIN ======================
 def main():
     st.title("🎓 Student LMS")
 
-    # Sidebar admin access
+    # Admin sidebar
     st.sidebar.header("🔐 Admin Access")
     admin_pass = st.sidebar.text_input("Enter admin password", type="password")
     if admin_pass == ADMIN_PASSWORD:
         st.sidebar.success("✅ Admin access granted")
-        if os.path.exists(PROGRESS_FILE):
-            df_progress = pd.read_csv(PROGRESS_FILE)
-            st.sidebar.subheader("📊 Student Progress")
-            st.sidebar.dataframe(df_progress)
-        else:
-            st.sidebar.info("No progress data yet.")
+        df_progress = load_progress_from_github()
+        st.sidebar.subheader("📊 Student Progress")
+        st.sidebar.dataframe(df_progress)
 
     student_df = load_students()
     if student_df is None:
         return
 
     regno = st.text_input("Enter your Registration Number:").strip()
-    if regno:
-        student = student_df[student_df["RegNo"] == regno]
-        if student.empty:
-            st.error("❌ Invalid Registration Number")
-            return
+    if not regno:
+        return
 
-        name = student.iloc[0]["Name"]
-        st.success(f"Welcome {name} (RegNo: {regno})")
-        cert_file = os.path.join(CERT_DIR, f"{name}_{regno}.pdf")
+    student = student_df[student_df["RegNo"] == regno]
+    if student.empty:
+        st.error("❌ Invalid Registration Number")
+        return
 
+    name = student.iloc[0]["Name"]
+    st.success(f"Welcome {name} (RegNo: {regno})")
+    cert_file = os.path.join(CERT_DIR, f"{name}_{regno}.pdf")
+
+    # Load progress
+    df_progress = load_progress_from_github()
+    df_progress["RegNo"] = df_progress["RegNo"].astype(str).str.strip()
+    record = df_progress[df_progress["RegNo"] == regno]
+
+    if not record.empty:
+        st.info("✅ You have already watched the video. You can download your certificate below.")
+        if not os.path.exists(cert_file):
+            cert_file = generate_certificate(name, regno)
+        with open(cert_file, "rb") as f:
+            st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file), key=f"download_{regno}")
+    else:
         if st.session_state.get("current_student") != regno:
             st.session_state.video_finished = False
             st.session_state.current_student = regno
 
-        # Show video
-        if not st.session_state.video_finished:
-            show_video_with_timer(VIDEO_URL, VIDEO_DURATION)
+        show_video_with_timer(VIDEO_URL, VIDEO_DURATION)
 
-        # “I have watched video” button
         if not st.session_state.video_finished:
             if st.button("✅ I have watched the video"):
                 st.session_state.video_finished = True
 
-        # Show certificate download & update progress
-        if st.session_state.video_finished or os.path.exists(cert_file):
+        if st.session_state.video_finished:
             if not os.path.exists(cert_file):
                 cert_file = generate_certificate(name, regno)
-            update_progress(regno, name)
+            # Update GitHub
+            df_progress = df_progress[df_progress["RegNo"] != regno]
+            new_row = {
+                "RegNo": regno,
+                "Name": name,
+                "Video_Status": "Completed",
+                "Certificate_Status": "Downloaded",
+                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            df_progress = pd.concat([df_progress, pd.DataFrame([new_row])], ignore_index=True)
+            upload_progress_to_github(df_progress)
+
             with open(cert_file, "rb") as f:
-                st.download_button(
-                    label="📄 Download Certificate",
-                    data=f,
-                    file_name=os.path.basename(cert_file),
-                    key=f"download_{regno}_final"
-                )
+                st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file), key=f"download_{regno}")
 
 if __name__ == "__main__":
     main()
