@@ -7,6 +7,7 @@ from datetime import datetime
 import base64
 import requests
 import streamlit.components.v1 as components
+from fpdf import FPDF
 
 # ====================== CONFIG ======================
 BUFFER_SIZE = 64 * 1024
@@ -14,7 +15,7 @@ CERT_DIR = "certificates"
 os.makedirs(CERT_DIR, exist_ok=True)
 
 VIDEO_URL = "https://www.youtube.com/embed/YOUR_VIDEO_ID"  # Replace with your video ID
-VIDEO_DURATION = 15  # seconds, adjust to your video
+VIDEO_DURATION = 15  # seconds
 
 AES_FILE = st.secrets["aes"]["file"]
 AES_PASSWORD = st.secrets["aes"]["password"]
@@ -26,24 +27,19 @@ PROGRESS_FILE = st.secrets["github"]["progress_file"]
 ADMIN_PASSWORD = st.secrets["admin"]["password"]
 
 # ====================== CERTIFICATE BACKGROUND ======================
-# ====================== EMBEDDED CERTIFICATE BACKGROUND ======================
 certificate_base64 = """
-iVBORw0KGgoAAAANSUhEUgAAArwAAAEACAIAAAD7H7Y8AAAACXBIWXMAAA7EAAAOxAGVKw4b
-AAAAB3RJTUUH5QoGBxkfH3V0hwAAABl0RVh0Q29tbWVudABDcmVhdGVkIHdpdGggR0lNUFeBDhcA
-AAAASURBVHja7cEBAQAAAIIg/69uZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA8A6kAA
-ABl0RVh0Q29tbWVudABDcmVhdGVkIHdpdGggR0lNUFeBDhcAAAAASUVORK5CYII=
+iVBORw0KGgoAAAANSUhEUgAAArwAAAEACAIAAAD7H7Y8AAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAB3RJTUUH5QoGBxkfH3V0hwAAABl0RVh0Q29tbWVudABDcmVhdGVkIHdpdGggR0lNUFeBDhcAAAAASURBVHja7cEBAQAAAIIg/69uZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA8A6kAAABl0RVh0Q29tbWVudABDcmVhdGVkIHdpdGggR0lNUFeBDhcAAAAASUVORK5CYII=
 """
+
 def save_certificate_background():
-    import base64, os
-    img_bytes = base64.b64decode(certificate_base64)
-    file_path = os.path.join("certificates", "certificate_bg.jpeg")
-    os.makedirs("certificates", exist_ok=True)
+    clean_b64 = certificate_base64.replace("\n", "").replace(" ", "")
+    img_bytes = base64.b64decode(clean_b64)
+    file_path = os.path.join(CERT_DIR, "certificate_bg.jpeg")
     with open(file_path, "wb") as f:
         f.write(img_bytes)
     return file_path
 
 BG_IMAGE_PATH = save_certificate_background()
-
 
 # ====================== LOAD STUDENTS ======================
 @st.cache_data
@@ -96,7 +92,6 @@ def upload_progress_to_github(df):
 
 # ====================== GENERATE CERTIFICATE ======================
 def generate_certificate(name, regno):
-    from fpdf import FPDF
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     file_path = os.path.join(CERT_DIR, f"{name}_{regno}.pdf")
     pdf = FPDF(orientation="L", unit="mm", format="A4")
