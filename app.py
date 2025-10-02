@@ -33,10 +33,13 @@ CERT_DIR = "certificates"
 os.makedirs(CERT_DIR, exist_ok=True)
 
 VIDEO_URL = "https://www.youtube.com/embed/YOUR_VIDEO_ID"  # Replace with your video
-VIDEO_DURATION = 30  # Video duration in seconds (update to real length)
+VIDEO_DURATION = 30  # Video duration in seconds
 
 AES_FILE = st.secrets["aes"]["file"]           # AES encrypted student file
 AES_PASSWORD = st.secrets["aes"]["password"]   # AES password
+
+PROGRESS_FILE = "progress.csv"
+ADMIN_PASSWORD = st.secrets["admin"]["password"]  # Admin view password
 
 # ====================== LOAD STUDENTS ======================
 @st.cache_data(show_spinner=True)
@@ -61,7 +64,6 @@ def load_students():
 def generate_certificate(name, regno):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     file_path = os.path.join(CERT_DIR, f"{name}_{regno}.pdf")
-
     try:
         from fpdf import FPDF
         pdf = FPDF(orientation="L", unit="mm", format="A4")
@@ -83,13 +85,11 @@ def generate_certificate(name, regno):
         pdf.set_font("Helvetica", '', 16)
         pdf.cell(0, 10, f"Date & Time: {timestamp}", ln=True, align="R")
         pdf.output(file_path)
-
     except ModuleNotFoundError:
         from reportlab.pdfgen import canvas
         from reportlab.lib.pagesizes import A4
         from PIL import Image
         from reportlab.lib.utils import ImageReader
-
         width, height = A4
         c = canvas.Canvas(file_path, pagesize=A4)
         if BG_IMAGE_PATH:
@@ -104,28 +104,41 @@ def generate_certificate(name, regno):
         c.drawCentredString(width/2, height-190, "has successfully completed the video session.")
         c.drawCentredString(width/2, height-210, f"Date & Time: {timestamp}")
         c.save()
-
     return file_path
 
-# ====================== VIDEO WITH AUTOMATIC TIMER ======================
-def show_video_with_timer(video_url, video_duration_sec, regno):
+# ====================== PROGRESS LOG ======================
+def update_progress(regno, name):
+    if os.path.exists(PROGRESS_FILE):
+        df = pd.read_csv(PROGRESS_FILE)
+    else:
+        df = pd.DataFrame(columns=["RegNo", "Name", "Video_Status", "Certificate_Status", "Timestamp"])
+    df = df[df["RegNo"] != regno]
+    new_row = {
+        "RegNo": regno,
+        "Name": name,
+        "Video_Status": "Completed",
+        "Certificate_Status": "Downloaded",
+        "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    df.to_csv(PROGRESS_FILE, index=False)
+
+# ====================== VIDEO WITH TIMER ======================
+def show_video_with_timer(video_url, duration_sec):
     html_code = f"""
     <div>
         <iframe width="800" height="450" src="{video_url}" frameborder="0" allowfullscreen></iframe>
-        <p id="timer_text">⏳ Watch the video. Time left: {video_duration_sec} seconds</p>
+        <p id="timer_text">⏳ Watch the video. Time left: {duration_sec} seconds</p>
         <script>
-            var timeLeft = {video_duration_sec};
+            var timeLeft = {duration_sec};
             var timerText = document.getElementById("timer_text");
-
-            // Reset video_finished for new student
             localStorage.removeItem("video_finished");
-
             var countdown = setInterval(function() {{
                 if(timeLeft <= 0) {{
                     clearInterval(countdown);
                     timerText.innerHTML = "✅ You have finished the video. Button enabled.";
                     localStorage.setItem("video_finished", "true");
-                    location.reload();
+                    window.parent.postMessage({{video_done:true}}, "*");
                 }} else {{
                     timerText.innerHTML = "⏳ Watch the video. Time left: " + timeLeft + " seconds";
                 }}
@@ -140,6 +153,18 @@ def show_video_with_timer(video_url, video_duration_sec, regno):
 def main():
     st.title("🎓 Student LMS")
 
+    # Sidebar admin access
+    st.sidebar.header("🔐 Admin Access")
+    admin_pass = st.sidebar.text_input("Enter admin password", type="password")
+    if admin_pass == ADMIN_PASSWORD:
+        st.sidebar.success("✅ Admin access granted")
+        if os.path.exists(PROGRESS_FILE):
+            df_progress = pd.read_csv(PROGRESS_FILE)
+            st.sidebar.subheader("📊 Student Progress")
+            st.sidebar.dataframe(df_progress)
+        else:
+            st.sidebar.info("No progress data yet.")
+
     student_df = load_students()
     if student_df is None:
         return
@@ -153,33 +178,26 @@ def main():
 
         name = student.iloc[0]["Name"]
         st.success(f"Welcome {name} (RegNo: {regno})")
-
         cert_file = os.path.join(CERT_DIR, f"{name}_{regno}.pdf")
 
-        # Reset session_state if a new student logs in
         if st.session_state.get("current_student") != regno:
             st.session_state.video_finished = False
             st.session_state.current_student = regno
 
-        # Check if video already watched
-        if st.session_state.video_finished or os.path.exists(cert_file):
-            st.session_state.video_finished = True
-            if os.path.exists(cert_file):
-                st.info("✅ You already watched the video. Download your certificate below.")
-                with open(cert_file, "rb") as f:
-                    st.download_button(
-                        label="📄 Download Certificate",
-                        data=f,
-                        file_name=os.path.basename(cert_file),
-                        key=f"download_{regno}"
-                    )
-        else:
-            show_video_with_timer(VIDEO_URL, VIDEO_DURATION, regno)
+        # Show video
+        if not st.session_state.video_finished:
+            show_video_with_timer(VIDEO_URL, VIDEO_DURATION)
 
-        # Show certificate download button only if video finished
-        if st.session_state.video_finished:
+        # “I have watched video” button
+        if not st.session_state.video_finished:
+            if st.button("✅ I have watched the video"):
+                st.session_state.video_finished = True
+
+        # Show certificate download & update progress
+        if st.session_state.video_finished or os.path.exists(cert_file):
             if not os.path.exists(cert_file):
                 cert_file = generate_certificate(name, regno)
+            update_progress(regno, name)
             with open(cert_file, "rb") as f:
                 st.download_button(
                     label="📄 Download Certificate",
