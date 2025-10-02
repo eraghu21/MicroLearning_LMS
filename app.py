@@ -13,7 +13,6 @@ PASTE_YOUR_BASE64_STRING_HERE
 """
 
 def save_certificate_background():
-    """Decode Base64 image and save as JPEG."""
     try:
         img_bytes = base64.b64decode(certificate_base64)
         CERT_DIR = "certificates"
@@ -108,15 +107,11 @@ def generate_certificate(name, regno):
 
     return file_path
 
-# ====================== VIDEO WITH TIMER ======================
+# ====================== VIDEO WITH AUTOMATIC TIMER ======================
 def show_video_with_timer(video_url, video_duration_sec):
-    """
-    Embed YouTube video and enable button only after timer finishes.
-    """
     html_code = f"""
     <div>
-        <iframe id="video_player" width="800" height="450"
-        src="{video_url}?enablejsapi=1" frameborder="0" allowfullscreen></iframe>
+        <iframe width="800" height="450" src="{video_url}" frameborder="0" allowfullscreen></iframe>
         <p id="timer_text">⏳ Watch the video. Time left: {video_duration_sec} seconds</p>
         <script>
             var timeLeft = {video_duration_sec};
@@ -125,13 +120,11 @@ def show_video_with_timer(video_url, video_duration_sec):
             var countdown = setInterval(function() {{
                 if(timeLeft <= 0) {{
                     clearInterval(countdown);
-                    timerText.innerHTML = "✅ You have finished the video. You can click the button below.";
+                    timerText.innerHTML = "✅ You have finished the video. Button enabled.";
 
-                    const el = document.createElement("input");
-                    el.type = "hidden";
-                    el.id = "video_done";
-                    el.value = "done";
-                    document.body.appendChild(el);
+                    // Inform Streamlit by setting localStorage
+                    localStorage.setItem("video_finished", "true");
+                    location.reload();
                 }} else {{
                     timerText.innerHTML = "⏳ Watch the video. Time left: " + timeLeft + " seconds";
                 }}
@@ -162,33 +155,26 @@ def main():
 
         cert_file = os.path.join(CERT_DIR, f"{name}_{regno}.pdf")
 
-        if os.path.exists(cert_file):
-            st.info("✅ You already watched the video. Download your certificate below.")
-            with open(cert_file, "rb") as f:
-                st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file))
+        # Check if student has already finished
+        if st.session_state.get("video_finished", False) or os.path.exists(cert_file):
+            st.session_state.video_finished = True
+            if os.path.exists(cert_file):
+                st.info("✅ You already watched the video. Download your certificate below.")
+                with open(cert_file, "rb") as f:
+                    st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file))
         else:
-            if "video_finished" not in st.session_state:
-                st.session_state.video_finished = False
-
             show_video_with_timer(VIDEO_URL, VIDEO_DURATION)
 
-            # Detect JS hidden input automatically
-            try:
-                from streamlit_javascript import st_javascript
-                js_done = st_javascript("document.getElementById('video_done')?.value")
-                if js_done == "done":
-                    st.session_state.video_finished = True
-            except:
-                pass
-
-            if st.session_state.video_finished:
-                if st.button("✅ I have watched the video"):
-                    cert_file = generate_certificate(name, regno)
-                    st.success("🎉 Certificate generated! You can download it now.")
-                    with open(cert_file, "rb") as f:
-                        st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file))
+        # Show button if finished
+        if st.session_state.video_finished:
+            if not os.path.exists(cert_file) or cert_file is None:
+                cert_file = generate_certificate(name, regno)
+            if os.path.exists(cert_file):
+                st.success("🎉 Certificate ready!")
+                with open(cert_file, "rb") as f:
+                    st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file))
             else:
-                st.button("✅ I have watched the video", disabled=True)
+                st.warning("⚠️ Generating certificate...")
 
 if __name__ == "__main__":
     main()
