@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import pyAesCrypt
 import io
@@ -24,7 +25,6 @@ def save_certificate_background():
         st.warning(f"⚠️ Failed to save background image: {e}")
         return None
 
-# Save background image and get path
 BG_IMAGE_PATH = save_certificate_background()
 
 # ====================== CONFIG ======================
@@ -33,6 +33,8 @@ CERT_DIR = "certificates"
 os.makedirs(CERT_DIR, exist_ok=True)
 
 VIDEO_URL = "https://www.youtube.com/embed/YOUR_VIDEO_ID"  # Replace with your video
+VIDEO_DURATION = 120  # Video duration in seconds
+
 AES_FILE = st.secrets["aes"]["file"]           # AES encrypted student file
 AES_PASSWORD = st.secrets["aes"]["password"]   # AES password
 
@@ -107,6 +109,35 @@ def generate_certificate(name, regno):
 
     return file_path
 
+# ====================== VIDEO WITH TIMER ======================
+def show_video_with_timer(video_url, video_duration_sec):
+    """
+    Embed YouTube video and alert when the video finishes.
+    """
+    html_code = f"""
+    <div>
+        <iframe id="video_player" width="800" height="450"
+        src="{video_url}?enablejsapi=1" frameborder="0" allowfullscreen></iframe>
+        <p id="timer_text">⏳ Watch the video. Time left: {video_duration_sec} seconds</p>
+        <script>
+            var timeLeft = {video_duration_sec};
+            var timerText = document.getElementById("timer_text");
+
+            var countdown = setInterval(function() {{
+                if(timeLeft <= 0) {{
+                    clearInterval(countdown);
+                    timerText.innerHTML = "✅ You have finished the video. You can click the button below.";
+                    window.parent.postMessage({{video_finished: true}}, "*");
+                }} else {{
+                    timerText.innerHTML = "⏳ Watch the video. Time left: " + timeLeft + " seconds";
+                }}
+                timeLeft -= 1;
+            }}, 1000);
+        </script>
+    </div>
+    """
+    components.html(html_code, height=500)
+
 # ====================== MAIN APP ======================
 def main():
     st.title("🎓 Student LMS")
@@ -132,12 +163,20 @@ def main():
             with open(cert_file, "rb") as f:
                 st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file))
         else:
-            st.video(VIDEO_URL)
-            if st.button("✅ I have watched the video"):
-                cert_file = generate_certificate(name, regno)
-                st.success("🎉 Certificate generated! You can download it now.")
-                with open(cert_file, "rb") as f:
-                    st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file))
+            # Initialize session state for video finished
+            if "video_finished" not in st.session_state:
+                st.session_state.video_finished = False
+
+            show_video_with_timer(VIDEO_URL, VIDEO_DURATION)
+
+            if st.session_state.video_finished:
+                if st.button("✅ I have watched the video"):
+                    cert_file = generate_certificate(name, regno)
+                    st.success("🎉 Certificate generated! You can download it now.")
+                    with open(cert_file, "rb") as f:
+                        st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file))
+            else:
+                st.button("✅ I have watched the video", disabled=True)
 
 if __name__ == "__main__":
     main()
