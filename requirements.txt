@@ -1,6 +1,5 @@
 streamlit
 pandas
 pyAesCrypt
-reportlab
+fpdf2
 openpyxl
-PyGithub
