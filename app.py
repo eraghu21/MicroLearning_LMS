@@ -4,6 +4,7 @@ import pyAesCrypt
 import io
 import os
 import base64
+import requests
 from datetime import datetime
 
 # Try importing FPDF, fallback to ReportLab
@@ -23,9 +24,40 @@ CERT_DIR = "certificates"
 os.makedirs(CERT_DIR, exist_ok=True)
 
 VIDEO_URL = "https://www.youtube.com/embed/YOUR_VIDEO_ID"  # Replace with your YouTube video
-AES_FILE = st.secrets["aes"]["file"]             # AES student list
-AES_PASSWORD = st.secrets["aes"]["password"]     # AES password
-AES_BG_IMAGE = st.secrets["aes"]["bg_image"]     # AES background image
+
+# AES & GitHub Config
+AES_PASSWORD = st.secrets["aes"]["password"]
+AES_FILE_GITHUB = st.secrets["github"]["student_file"]   # path on GitHub
+AES_BG_GITHUB = st.secrets["github"]["bg_file"]           # path on GitHub
+GITHUB_REPO = st.secrets["github"]["repo"]
+GITHUB_TOKEN = st.secrets["github"]["token"]
+
+# Local paths
+AES_FILE = os.path.join(CERT_DIR, os.path.basename(AES_FILE_GITHUB))
+AES_BG_IMAGE = os.path.join(CERT_DIR, os.path.basename(AES_BG_GITHUB))
+
+# === GitHub file downloader ===
+def download_from_github(github_path, local_path):
+    url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/{github_path}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}
+    try:
+        r = requests.get(url, headers=headers)
+        if r.status_code == 200:
+            with open(local_path, "wb") as f:
+                f.write(r.content)
+            return True
+        else:
+            st.warning(f"⚠️ Failed to download {github_path} from GitHub.")
+            return False
+    except Exception as e:
+        st.warning(f"⚠️ Exception downloading {github_path}: {e}")
+        return False
+
+# === Download AES files if not exist locally ===
+if not os.path.exists(AES_FILE):
+    download_from_github(AES_FILE_GITHUB, AES_FILE)
+if not os.path.exists(AES_BG_IMAGE):
+    download_from_github(AES_BG_GITHUB, AES_BG_IMAGE)
 
 # === Load and decrypt student list ===
 @st.cache_data(show_spinner=True)
@@ -52,7 +84,7 @@ def load_students():
         st.error(f"❌ Failed to load student file: {e}")
         return None
 
-# === Decrypt background image to BytesIO ===
+# === Decrypt background image ===
 @st.cache_data(show_spinner=True)
 def load_bg_image():
     try:
