@@ -3,7 +3,6 @@ import pandas as pd
 import pyAesCrypt
 import io
 import os
-import base64
 import requests
 from datetime import datetime
 
@@ -28,13 +27,13 @@ VIDEO_URL = "https://www.youtube.com/embed/YOUR_VIDEO_ID"  # Replace with your Y
 # === Secrets from Streamlit Cloud ===
 AES_PASSWORD = st.secrets["aes"]["password"]
 AES_FILE_GITHUB = st.secrets["github"]["student_file"]
-AES_BG_GITHUB = st.secrets["github"]["bg_file"]
+AES_BG_GITHUB = st.secrets["github"].get("bg_file")  # optional
 GITHUB_REPO = st.secrets["github"]["repo"]
-GITHUB_TOKEN = st.secrets["github"]["token"]
+GITHUB_TOKEN = st.secrets["github"].get("token")
 
 # Local paths
 AES_FILE = os.path.join(CERT_DIR, os.path.basename(AES_FILE_GITHUB))
-AES_BG_IMAGE = os.path.join(CERT_DIR, os.path.basename(AES_BG_GITHUB))
+AES_BG_IMAGE = os.path.join(CERT_DIR, os.path.basename(AES_BG_GITHUB)) if AES_BG_GITHUB else None
 
 # === GitHub file downloader ===
 def download_from_github(github_path, local_path):
@@ -53,10 +52,12 @@ def download_from_github(github_path, local_path):
         st.warning(f"⚠️ Exception downloading {github_path}: {e}")
         return False
 
-# Download AES files if not exist
+# Download student file
 if not os.path.exists(AES_FILE):
     download_from_github(AES_FILE_GITHUB, AES_FILE)
-if not os.path.exists(AES_BG_IMAGE):
+
+# Download background file (optional)
+if AES_BG_IMAGE and not os.path.exists(AES_BG_IMAGE):
     download_from_github(AES_BG_GITHUB, AES_BG_IMAGE)
 
 # === Load and decrypt student list ===
@@ -74,16 +75,15 @@ def load_students():
         df["RegNo"] = df["RegNo"].astype(str).str.strip()
         df["Name"] = df["Name"].astype(str).str.strip()
         return df
-    except pyAesCrypt.exceptions.DecryptionException:
-        st.error("❌ Failed to decrypt student file: Wrong password or corrupted file.")
-        return None
     except Exception as e:
-        st.error(f"❌ Failed to load student file: {e}")
+        st.error(f"❌ Failed to load/decrypt student file: {e}")
         return None
 
-# === Load background image ===
+# === Load background image (optional) ===
 @st.cache_data(show_spinner=True)
 def load_bg_image():
+    if not AES_BG_IMAGE or not os.path.exists(AES_BG_IMAGE):
+        return None
     try:
         decrypted = io.BytesIO()
         with open(AES_BG_IMAGE, "rb") as f:
@@ -98,10 +98,12 @@ def load_bg_image():
 
 # === Generate certificate ===
 def generate_certificate(name, regno, bg_bytesio=None):
-    file_path = os.path.join(CERT_DIR, f"{name}_{regno}.pdf")
+    from datetime import datetime
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    file_path = os.path.join(CERT_DIR, f"{name}_{regno}.pdf")
 
     if USE_FPDF:
+        from fpdf import FPDF
         pdf = FPDF(orientation="L", unit="mm", format="A4")
         pdf.add_page()
         if bg_bytesio:
@@ -111,12 +113,10 @@ def generate_certificate(name, regno, bg_bytesio=None):
             pdf.image(temp_img_path, x=0, y=0, w=297, h=210)
             bg_bytesio.seek(0)
         pdf.set_font("Helvetica", 'B', 32)
-        pdf.set_text_color(0, 51, 102)
         pdf.cell(0, 50, "Certificate of Completion", ln=True, align="C")
         pdf.ln(10)
         pdf.set_font("Helvetica", '', 24)
-        pdf.set_text_color(0, 0, 0)
-        pdf.cell(0, 20, "This is to certify that", ln=True, align="C")
+        pdf.cell(0, 20, f"This is to certify that {name}", ln=True, align="C")
         pdf.set_font("Helvetica", 'B', 28)
         pdf.cell(0, 20, name, ln=True, align="C")
         pdf.set_font("Helvetica", '', 20)
@@ -129,9 +129,13 @@ def generate_certificate(name, regno, bg_bytesio=None):
         pdf.output(file_path)
 
     else:
-        c = canvas.Canvas(file_path, pagesize=A4)
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.pagesizes import A4
         width, height = A4
+        c = canvas.Canvas(file_path, pagesize=A4)
         if bg_bytesio:
+            from PIL import Image
+            from reportlab.lib.utils import ImageReader
             img = Image.open(bg_bytesio)
             img_reader = ImageReader(img)
             c.drawImage(img_reader, 0, 0, width=width, height=height)
@@ -154,7 +158,7 @@ def main():
     if student_df is None:
         return
 
-    bg_image_bytes = load_bg_image()
+    bg_image_bytes = load_bg_image()  # optional background
 
     regno = st.text_input("Enter your Registration Number:").strip()
     if regno:
