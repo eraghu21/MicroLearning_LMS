@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 import pyAesCrypt
 import io
@@ -7,46 +6,40 @@ import os
 from datetime import datetime
 import base64
 import requests
-
-# ====================== EMBEDDED CERTIFICATE BACKGROUND ======================
-certificate_base64 = """
-PASTE_YOUR_BASE64_STRING_HERE
-"""
-
-def save_certificate_background():
-    try:
-        img_bytes = base64.b64decode(certificate_base64)
-        CERT_DIR = "certificates"
-        os.makedirs(CERT_DIR, exist_ok=True)
-        file_path = os.path.join(CERT_DIR, "certificate_bg.jpeg")
-        with open(file_path, "wb") as f:
-            f.write(img_bytes)
-        return file_path
-    except Exception as e:
-        st.warning(f"⚠️ Failed to save background image: {e}")
-        return None
-
-BG_IMAGE_PATH = save_certificate_background()
+import streamlit.components.v1 as components
 
 # ====================== CONFIG ======================
 BUFFER_SIZE = 64 * 1024
 CERT_DIR = "certificates"
 os.makedirs(CERT_DIR, exist_ok=True)
 
-VIDEO_URL = "https://www.youtube.com/embed/YOUR_VIDEO_ID"  # Replace with your video
-VIDEO_DURATION = 30  # Video duration in seconds
+VIDEO_URL = "https://www.youtube.com/embed/YOUR_VIDEO_ID"  # Replace with your video ID
+VIDEO_DURATION = 15  # seconds, adjust to your video
 
-AES_FILE = st.secrets["aes"]["file"]           
-AES_PASSWORD = st.secrets["aes"]["password"]  
-
-ADMIN_PASSWORD = st.secrets["admin"]["password"]  
+AES_FILE = st.secrets["aes"]["file"]
+AES_PASSWORD = st.secrets["aes"]["password"]
 
 GITHUB_TOKEN = st.secrets["github"]["token"]
 REPO = st.secrets["github"]["repo"]
 PROGRESS_FILE = st.secrets["github"]["progress_file"]
 
+ADMIN_PASSWORD = st.secrets["admin"]["password"]
+
+# ====================== CERTIFICATE BACKGROUND ======================
+certificate_base64 = """
+PASTE_YOUR_BASE64_STRING_HERE
+"""
+def save_certificate_background():
+    img_bytes = base64.b64decode(certificate_base64)
+    file_path = os.path.join(CERT_DIR, "certificate_bg.jpeg")
+    with open(file_path, "wb") as f:
+        f.write(img_bytes)
+    return file_path
+
+BG_IMAGE_PATH = save_certificate_background()
+
 # ====================== LOAD STUDENTS ======================
-@st.cache_data(show_spinner=True)
+@st.cache_data
 def load_students():
     try:
         decrypted = io.BytesIO()
@@ -61,7 +54,7 @@ def load_students():
         df["Name"] = df["Name"].astype(str).str.strip()
         return df
     except Exception as e:
-        st.error(f"❌ Failed to load/decrypt student file: {e}")
+        st.error(f"❌ Failed to load student file: {e}")
         return None
 
 # ====================== GITHUB PROGRESS ======================
@@ -69,9 +62,11 @@ def load_progress_from_github():
     url = f"https://raw.githubusercontent.com/{REPO}/main/{PROGRESS_FILE}"
     response = requests.get(url)
     if response.status_code == 200:
-        return pd.read_csv(io.BytesIO(response.content), dtype={"RegNo": str})
+        df = pd.read_csv(io.BytesIO(response.content), dtype={"RegNo": str})
+        df["RegNo"] = df["RegNo"].astype(str).str.strip()
+        return df
     else:
-        return pd.DataFrame(columns=["RegNo", "Name", "Video_Status", "Certificate_Status", "Timestamp"])
+        return pd.DataFrame(columns=["RegNo","Name","Video_Status","Certificate_Status","Timestamp"])
 
 def upload_progress_to_github(df):
     csv_data = df.to_csv(index=False).encode()
@@ -94,50 +89,31 @@ def upload_progress_to_github(df):
 
 # ====================== GENERATE CERTIFICATE ======================
 def generate_certificate(name, regno):
+    from fpdf import FPDF
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     file_path = os.path.join(CERT_DIR, f"{name}_{regno}.pdf")
-    try:
-        from fpdf import FPDF
-        pdf = FPDF(orientation="L", unit="mm", format="A4")
-        pdf.add_page()
-        if BG_IMAGE_PATH:
-            pdf.image(BG_IMAGE_PATH, x=0, y=0, w=297, h=210)
-        pdf.set_font("Helvetica", 'B', 32)
-        pdf.cell(0, 50, "Certificate of Completion", ln=True, align="C")
-        pdf.ln(10)
-        pdf.set_font("Helvetica", '', 24)
-        pdf.cell(0, 20, "This is to certify that", ln=True, align="C")
-        pdf.set_font("Helvetica", 'B', 28)
-        pdf.cell(0, 20, name, ln=True, align="C")
-        pdf.set_font("Helvetica", '', 20)
-        pdf.cell(0, 15, f"Registration No: {regno}", ln=True, align="C")
-        pdf.ln(5)
-        pdf.cell(0, 15, "has successfully completed the video session.", ln=True, align="C")
-        pdf.ln(20)
-        pdf.set_font("Helvetica", '', 16)
-        pdf.cell(0, 10, f"Date & Time: {timestamp}", ln=True, align="R")
-        pdf.output(file_path)
-    except ModuleNotFoundError:
-        from reportlab.pdfgen import canvas
-        from reportlab.lib.pagesizes import A4
-        width, height = A4
-        c = canvas.Canvas(file_path, pagesize=A4)
-        if BG_IMAGE_PATH:
-            from PIL import Image
-            from reportlab.lib.utils import ImageReader
-            img = Image.open(BG_IMAGE_PATH)
-            c.drawImage(ImageReader(img), 0, 0, width=width, height=height)
-        c.setFont("Helvetica-Bold", 20)
-        c.drawCentredString(width/2, height-100, "Certificate of Completion")
-        c.setFont("Helvetica", 14)
-        c.drawCentredString(width/2, height-140, f"This is to certify that {name}")
-        c.drawCentredString(width/2, height-160, f"Reg No: {regno}")
-        c.drawCentredString(width/2, height-190, "has successfully completed the video session.")
-        c.drawCentredString(width/2, height-210, f"Date & Time: {timestamp}")
-        c.save()
+    pdf = FPDF(orientation="L", unit="mm", format="A4")
+    pdf.add_page()
+    if BG_IMAGE_PATH:
+        pdf.image(BG_IMAGE_PATH, x=0, y=0, w=297, h=210)
+    pdf.set_font("Helvetica", 'B', 32)
+    pdf.cell(0, 50, "Certificate of Completion", ln=True, align="C")
+    pdf.ln(10)
+    pdf.set_font("Helvetica", '', 24)
+    pdf.cell(0, 20, "This is to certify that", ln=True, align="C")
+    pdf.set_font("Helvetica", 'B', 28)
+    pdf.cell(0, 20, name, ln=True, align="C")
+    pdf.set_font("Helvetica", '', 20)
+    pdf.cell(0, 15, f"Registration No: {regno}", ln=True, align="C")
+    pdf.ln(5)
+    pdf.cell(0, 15, "has successfully completed the video session.", ln=True, align="C")
+    pdf.ln(20)
+    pdf.set_font("Helvetica", '', 16)
+    pdf.cell(0, 10, f"Date & Time: {timestamp}", ln=True, align="R")
+    pdf.output(file_path)
     return file_path
 
-# ====================== VIDEO ======================
+# ====================== VIDEO WITH TIMER ======================
 def show_video_with_timer(video_url, duration_sec):
     html_code = f"""
     <div>
@@ -163,7 +139,7 @@ def show_video_with_timer(video_url, duration_sec):
     """
     components.html(html_code, height=500, scrolling=True)
 
-# ====================== MAIN ======================
+# ====================== MAIN APP ======================
 def main():
     st.title("🎓 Student LMS")
 
@@ -176,6 +152,7 @@ def main():
         st.sidebar.subheader("📊 Student Progress")
         st.sidebar.dataframe(df_progress)
 
+    # Load students
     student_df = load_students()
     if student_df is None:
         return
@@ -191,6 +168,7 @@ def main():
 
     name = student.iloc[0]["Name"]
     st.success(f"Welcome {name} (RegNo: {regno})")
+
     cert_file = os.path.join(CERT_DIR, f"{name}_{regno}.pdf")
 
     # Load progress
@@ -211,11 +189,11 @@ def main():
 
         show_video_with_timer(VIDEO_URL, VIDEO_DURATION)
 
-        if not st.session_state.video_finished:
+        if not st.session_state.get("video_finished", False):
             if st.button("✅ I have watched the video"):
                 st.session_state.video_finished = True
 
-        if st.session_state.video_finished:
+        if st.session_state.get("video_finished", False):
             if not os.path.exists(cert_file):
                 cert_file = generate_certificate(name, regno)
             # Update GitHub
@@ -228,7 +206,11 @@ def main():
                 "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
             df_progress = pd.concat([df_progress, pd.DataFrame([new_row])], ignore_index=True)
-            upload_progress_to_github(df_progress)
+            upload_success = upload_progress_to_github(df_progress)
+            if upload_success:
+                st.success("✅ Progress saved!")
+            else:
+                st.error("❌ Failed to save progress!")
 
             with open(cert_file, "rb") as f:
                 st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file), key=f"download_{regno}")
