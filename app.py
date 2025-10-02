@@ -5,7 +5,7 @@ import io
 import os
 from datetime import datetime
 
-# Try FPDF, fallback to ReportLab
+# === Try importing FPDF, fallback to ReportLab ===
 try:
     from fpdf import FPDF
     USE_FPDF = True
@@ -31,6 +31,9 @@ AES_BG_IMAGE = st.secrets["aes"]["bg_image"]     # Background image AES
 def load_students():
     try:
         decrypted = io.BytesIO()
+        if not os.path.exists(AES_FILE):
+            st.error(f"❌ AES file not found: {AES_FILE}")
+            return None
         with open(AES_FILE, "rb") as f:
             f.seek(0, 2)
             file_len = f.tell()
@@ -41,14 +44,20 @@ def load_students():
         df["RegNo"] = df["RegNo"].astype(str).str.strip()
         df["Name"] = df["Name"].astype(str).str.strip()
         return df
+    except pyAesCrypt.exceptions.DecryptionException:
+        st.error("❌ Failed to decrypt student file: Wrong password or corrupted file.")
+        return None
     except Exception as e:
-        st.error(f"❌ Failed to decrypt student file: {e}")
+        st.error(f"❌ Failed to load student file: {e}")
         return None
 
 # === Decrypt background image to BytesIO ===
 @st.cache_data(show_spinner=True)
 def load_bg_image():
     try:
+        if not os.path.exists(AES_BG_IMAGE):
+            st.warning(f"⚠️ Background AES file not found: {AES_BG_IMAGE}")
+            return None
         decrypted = io.BytesIO()
         with open(AES_BG_IMAGE, "rb") as f:
             f.seek(0, 2)
@@ -57,8 +66,11 @@ def load_bg_image():
             pyAesCrypt.decryptStream(f, decrypted, AES_PASSWORD, BUFFER_SIZE, file_len)
         decrypted.seek(0)
         return decrypted
+    except pyAesCrypt.exceptions.DecryptionException:
+        st.warning("⚠️ Failed to decrypt background image: Wrong password or corrupted file.")
+        return None
     except Exception as e:
-        st.warning(f"⚠️ Failed to decrypt background image: {e}")
+        st.warning(f"⚠️ Failed to load background image: {e}")
         return None
 
 # === Generate certificate ===
@@ -70,7 +82,6 @@ def generate_certificate(name, regno, bg_bytesio=None):
         pdf = FPDF(orientation="L", unit="mm", format="A4")
         pdf.add_page()
         if bg_bytesio:
-            # Save temp image from BytesIO for FPDF
             temp_img_path = os.path.join(CERT_DIR, "temp_bg.jpg")
             with open(temp_img_path, "wb") as f:
                 f.write(bg_bytesio.read())
@@ -95,7 +106,6 @@ def generate_certificate(name, regno, bg_bytesio=None):
         pdf.output(file_path)
 
     else:
-        # ReportLab fallback
         c = canvas.Canvas(file_path, pagesize=A4)
         width, height = A4
         if bg_bytesio:
