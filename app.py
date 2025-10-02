@@ -108,7 +108,7 @@ def generate_certificate(name, regno):
     return file_path
 
 # ====================== VIDEO WITH AUTOMATIC TIMER ======================
-def show_video_with_timer(video_url, video_duration_sec):
+def show_video_with_timer(video_url, video_duration_sec, regno):
     html_code = f"""
     <div>
         <iframe width="800" height="450" src="{video_url}" frameborder="0" allowfullscreen></iframe>
@@ -117,12 +117,13 @@ def show_video_with_timer(video_url, video_duration_sec):
             var timeLeft = {video_duration_sec};
             var timerText = document.getElementById("timer_text");
 
+            // Reset video_finished for new student
+            localStorage.removeItem("video_finished");
+
             var countdown = setInterval(function() {{
                 if(timeLeft <= 0) {{
                     clearInterval(countdown);
                     timerText.innerHTML = "✅ You have finished the video. Button enabled.";
-
-                    // Inform Streamlit by setting localStorage
                     localStorage.setItem("video_finished", "true");
                     location.reload();
                 }} else {{
@@ -133,7 +134,7 @@ def show_video_with_timer(video_url, video_duration_sec):
         </script>
     </div>
     """
-    components.html(html_code, height=500)
+    components.html(html_code, height=500, scrolling=True)
 
 # ====================== MAIN APP ======================
 def main():
@@ -155,26 +156,37 @@ def main():
 
         cert_file = os.path.join(CERT_DIR, f"{name}_{regno}.pdf")
 
-        # Check if student has already finished
-        if st.session_state.get("video_finished", False) or os.path.exists(cert_file):
+        # Reset session_state if a new student logs in
+        if st.session_state.get("current_student") != regno:
+            st.session_state.video_finished = False
+            st.session_state.current_student = regno
+
+        # Check if video already watched
+        if st.session_state.video_finished or os.path.exists(cert_file):
             st.session_state.video_finished = True
             if os.path.exists(cert_file):
                 st.info("✅ You already watched the video. Download your certificate below.")
                 with open(cert_file, "rb") as f:
-                    st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file))
+                    st.download_button(
+                        label="📄 Download Certificate",
+                        data=f,
+                        file_name=os.path.basename(cert_file),
+                        key=f"download_{regno}"
+                    )
         else:
-            show_video_with_timer(VIDEO_URL, VIDEO_DURATION)
+            show_video_with_timer(VIDEO_URL, VIDEO_DURATION, regno)
 
-        # Show button if finished
+        # Show certificate download button only if video finished
         if st.session_state.video_finished:
-            if not os.path.exists(cert_file) or cert_file is None:
+            if not os.path.exists(cert_file):
                 cert_file = generate_certificate(name, regno)
-            if os.path.exists(cert_file):
-                st.success("🎉 Certificate ready!")
-                with open(cert_file, "rb") as f:
-                    st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file))
-            else:
-                st.warning("⚠️ Generating certificate...")
+            with open(cert_file, "rb") as f:
+                st.download_button(
+                    label="📄 Download Certificate",
+                    data=f,
+                    file_name=os.path.basename(cert_file),
+                    key=f"download_{regno}_final"
+                )
 
 if __name__ == "__main__":
     main()
