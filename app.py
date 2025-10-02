@@ -26,22 +26,13 @@ PROGRESS_FILE = st.secrets["github"]["progress_file"]
 
 ADMIN_PASSWORD = st.secrets["admin"]["password"]
 
-# ====================== CERTIFICATE BACKGROUND ======================
+# ====================== EMBEDDED CERTIFICATE BACKGROUND ======================
 certificate_base64 = """
-iVBORw0KGgoAAAANSUhEUgAAAyAAAABkCAYAAABogL1UAAAACXBIWXMAAAsTAAALEwEAmpwY
-AAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAACBjSFJNAAB6JgAAgIQA
-APoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAABf0lEQVR42u3RAQEAAAgDoJvc6FNgAAAI
-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPwX4QAB9g
-kSxQAAAABJRU5ErkJggg==
-"""
+"""  # <-- Empty placeholder; add your base64 string here later
 
 def save_certificate_background():
+    if not certificate_base64.strip():
+        return None
     clean_b64 = certificate_base64.replace("\n", "").replace(" ", "")
     img_bytes = base64.b64decode(clean_b64)
     file_path = os.path.join(CERT_DIR, "certificate_bg.jpeg")
@@ -50,7 +41,6 @@ def save_certificate_background():
         f.write(img_bytes)
     return file_path
 
-# Define global variable
 BG_IMAGE_PATH = save_certificate_background()
 
 # ====================== LOAD STUDENTS ======================
@@ -200,18 +190,10 @@ def main():
         if st.session_state.get("current_student") != regno:
             st.session_state.video_finished = False
             st.session_state.current_student = regno
-   
+
         show_video_with_timer(VIDEO_URL, VIDEO_DURATION)
-
-        if not st.session_state.get("video_finished", False):
-            if st.button("✅ I have watched the video"):
-                st.session_state.video_finished = True
-
-        if st.session_state.get("video_finished", False):
-            if not os.path.exists(cert_file):
-                cert_file = generate_certificate(name, regno)
-            # Update GitHub
-            df_progress = df_progress[df_progress["RegNo"] != regno]
+        if st.button("✅ I have watched the video", key=f"watch_{regno}"):
+            cert_file = generate_certificate(name, regno)
             new_row = {
                 "RegNo": regno,
                 "Name": name,
@@ -219,15 +201,12 @@ def main():
                 "Certificate_Status": "Downloaded",
                 "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
+            df_progress = df_progress[df_progress["RegNo"] != regno]
             df_progress = pd.concat([df_progress, pd.DataFrame([new_row])], ignore_index=True)
-            upload_success = upload_progress_to_github(df_progress)
-            if upload_success:
-                st.success("✅ Progress saved!")
-            else:
-                st.error("❌ Failed to save progress!")
-
+            upload_progress_to_github(df_progress)
+            st.success("🎉 Certificate generated! You can download it now.")
             with open(cert_file, "rb") as f:
-                st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file), key=f"download_{regno}")
+                st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file), key=f"download_after_{regno}")
 
 if __name__ == "__main__":
     main()
