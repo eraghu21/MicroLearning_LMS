@@ -13,8 +13,8 @@ CERT_DIR = "certificates"
 os.makedirs(CERT_DIR, exist_ok=True)
 
 VIDEO_URL = "https://www.youtube.com/embed/YOUR_VIDEO_ID"  # Replace with your YouTube embed link
-AES_FILE = "students.xlsx.aes"  # Encrypted student list
-AES_PASSWORD = "your_aes_password_here"  # ⚠️ keep in st.secrets in production!
+AES_FILE = st.secrets["aes"]["file"]
+AES_PASSWORD = st.secrets["aes"]["password"]
 
 # === Decrypt Excel File ===
 def load_students():
@@ -29,7 +29,7 @@ def load_students():
         df = pd.read_excel(decrypted)
         return df
     except Exception as e:
-        st.error("❌ Failed to decrypt student file.")
+        st.error(f"❌ Failed to decrypt student file: {e}")
         return None
 
 # === Certificate Generator ===
@@ -50,7 +50,6 @@ def generate_certificate(name, regno):
 def main():
     st.title("🎓 Student LMS")
 
-    # Load student list once
     student_df = load_students()
     if student_df is None:
         return
