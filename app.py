@@ -15,7 +15,7 @@ CERT_DIR = "certificates"
 os.makedirs(CERT_DIR, exist_ok=True)
 
 VIDEO_URL = "https://www.youtube.com/embed/YOUR_VIDEO_ID"  # Replace with your video ID
-VIDEO_DURATION = 15  # seconds
+VIDEO_DURATION = 900  # 15 minutes (900 seconds)
 
 AES_FILE = st.secrets["aes"]["file"]
 AES_PASSWORD = st.secrets["aes"]["password"]
@@ -57,6 +57,11 @@ def load_students():
         df = pd.read_excel(decrypted)
         df["RegNo"] = df["RegNo"].astype(str).str.strip()
         df["Name"] = df["Name"].astype(str).str.strip()
+        # Optional: add Year, Section if available in Excel
+        if "Year" not in df.columns:
+            df["Year"] = ""
+        if "Section" not in df.columns:
+            df["Section"] = ""
         return df
     except Exception as e:
         st.error(f"❌ Failed to load student file: {e}")
@@ -71,7 +76,7 @@ def load_progress_from_github():
         df["RegNo"] = df["RegNo"].astype(str).str.strip()
         return df
     else:
-        return pd.DataFrame(columns=["RegNo","Name","Video_Status","Certificate_Status","Timestamp"])
+        return pd.DataFrame(columns=["RegNo","Name","Video_Status","Certificate_Status","Timestamp","Visits","Downloads"])
 
 def upload_progress_to_github(df):
     csv_data = df.to_csv(index=False).encode()
@@ -180,12 +185,30 @@ def main():
     df_progress["RegNo"] = df_progress["RegNo"].astype(str).str.strip()
     record = df_progress[df_progress["RegNo"] == regno]
 
+    # Handle visits
     if not record.empty:
+        df_progress.loc[df_progress["RegNo"] == regno, "Visits"] = df_progress.loc[df_progress["RegNo"] == regno, "Visits"].fillna(0) + 1
+    else:
+        new_row = {
+            "RegNo": regno,
+            "Name": name,
+            "Video_Status": "",
+            "Certificate_Status": "",
+            "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "Visits": 1,
+            "Downloads": 0
+        }
+        df_progress = pd.concat([df_progress, pd.DataFrame([new_row])], ignore_index=True)
+    upload_progress_to_github(df_progress)
+
+    if not record.empty and record.iloc[0]["Video_Status"] == "Completed":
         st.info("✅ You have already watched the video. You can download your certificate below.")
         if not os.path.exists(cert_file):
             cert_file = generate_certificate(name, regno)
         with open(cert_file, "rb") as f:
-            st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file), key=f"download_{regno}")
+            if st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file), key=f"download_{regno}"):
+                df_progress.loc[df_progress["RegNo"] == regno, "Downloads"] = df_progress.loc[df_progress["RegNo"] == regno, "Downloads"].fillna(0) + 1
+                upload_progress_to_github(df_progress)
     else:
         if st.session_state.get("current_student") != regno:
             st.session_state.video_finished = False
@@ -199,7 +222,9 @@ def main():
                 "Name": name,
                 "Video_Status": "Completed",
                 "Certificate_Status": "Downloaded",
-                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "Visits": record["Visits"].values[0] + 1 if not record.empty else 1,
+                "Downloads": 1
             }
             df_progress = df_progress[df_progress["RegNo"] != regno]
             df_progress = pd.concat([df_progress, pd.DataFrame([new_row])], ignore_index=True)
@@ -207,6 +232,16 @@ def main():
             st.success("🎉 Certificate generated! You can download it now.")
             with open(cert_file, "rb") as f:
                 st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file), key=f"download_after_{regno}")
+
+    # ====================== SHOW TOTAL COUNTS ======================
+    df_progress = load_progress_from_github()
+    total_visits = df_progress["Visits"].sum() if "Visits" in df_progress else 0
+    total_downloads = df_progress["Downloads"].sum() if "Downloads" in df_progress else 0
+
+    st.markdown("---")
+    st.subheader("🌍 Overall Progress (All Students)")
+    st.write(f"👀 **Total Visits**: {total_visits}")
+    st.write(f"⬇️ **Total Downloads**: {total_downloads}")
 
 if __name__ == "__main__":
     main()
