@@ -110,11 +110,14 @@ def generate_certificate(name, regno):
     #pdf.ln(10)
     #pdf.set_font("Helvetica", '', 24)
     #pdf.cell(0, 20, "This is to certify that", ln=True, align="C")
-    pdf.ln(50)
+    pdf.ln(90)
     pdf.set_font("Helvetica", 'B', 28)
     pdf.cell(0, 20, name, ln=True, align="C")
     pdf.set_font("Helvetica", '', 20)
-    pdf.cell(0, 15, f"Registration No: {regno}", ln=True, align="C")
+    pdf.cell(0, 15, f"{regno}", ln=True, align="C")
+    pdf.ln(5)
+    pdf.set_font("Helvetica", '', 20)
+    pdf.cell(0, 15, f"{year} {section}", ln=True, align="C")
     #pdf.ln(5)
     #pdf.cell(0, 15, "has successfully completed the video session.", ln=True, align="C")
     pdf.ln(20)
@@ -205,7 +208,7 @@ def main():
     if not record.empty and record.iloc[0]["Video_Status"] == "Completed":
         st.info("✅ You have already watched the video. You can download your certificate below.")
         if not os.path.exists(cert_file):
-            cert_file = generate_certificate(name, regno)
+            cert_file = generate_certificate(name, regno, year, section)
         with open(cert_file, "rb") as f:
             if st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file), key=f"download_{regno}"):
                 df_progress.loc[df_progress["RegNo"] == regno, "Downloads"] = df_progress.loc[df_progress["RegNo"] == regno, "Downloads"].fillna(0) + 1
