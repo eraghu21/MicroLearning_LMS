@@ -1,3 +1,4 @@
-RegNo,Name,Video_Status,Certificate_Status,Timestamp
-2127220501001,ABINAYA R,Completed,Downloaded,2025-10-02 17:51:23
-2127220501002,ABINAYASREE J,Completed,Downloaded,2025-10-03 07:56:48
+RegNo,Name,Video_Status,Certificate_Status,Timestamp,Visits,Downloads
+2127220501001,ABINAYA R,Completed,Downloaded,2025-10-02 17:51:23,,
+2127220501002,ABINAYASREE J,Completed,Downloaded,2025-10-03 07:56:48,,
+2127220501003,ADHITHYA A,,,2025-10-03 11:30:28,1.0,0.0
