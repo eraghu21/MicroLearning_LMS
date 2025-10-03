@@ -57,7 +57,7 @@ def load_students():
         df = pd.read_excel(decrypted)
         df["RegNo"] = df["RegNo"].astype(str).str.strip()
         df["Name"] = df["Name"].astype(str).str.strip()
-        # Optional: add Year, Section if available in Excel
+             # Optional: add Year, Section if available in Excel
         if "Year" not in df.columns:
             df["Year"] = ""
         if "Section" not in df.columns:
@@ -110,15 +110,16 @@ def generate_certificate(name, regno):
     #pdf.ln(10)
     #pdf.set_font("Helvetica", '', 24)
     #pdf.cell(0, 20, "This is to certify that", ln=True, align="C")
+    pdf.ln(50)
     pdf.set_font("Helvetica", 'B', 28)
     pdf.cell(0, 20, name, ln=True, align="C")
     pdf.set_font("Helvetica", '', 20)
     pdf.cell(0, 15, f"Registration No: {regno}", ln=True, align="C")
-    pdf.ln(5)
-    pdf.cell(0, 15, "has successfully completed the video session.", ln=True, align="C")
+    #pdf.ln(5)
+    #pdf.cell(0, 15, "has successfully completed the video session.", ln=True, align="C")
     pdf.ln(20)
     pdf.set_font("Helvetica", '', 16)
-    pdf.cell(0, 10, f"Date & Time: {timestamp}", ln=True, align="R")
+    pdf.cell(0, 10, f" {timestamp}", ln=True, align="R")
     pdf.output(file_path)
     return file_path
 
