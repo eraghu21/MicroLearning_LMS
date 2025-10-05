@@ -167,7 +167,12 @@ def show_video_with_timer(video_url, duration_sec):
 # ====================== MAIN APP ======================
 def main():
     st.title("🎓 CS22088 _Mobile Application Development ( Microlearning_ LMS)")
-
+     # Display stats BEFORE login
+    # --------------------------
+    st.markdown("## 📊 Course Statistics")
+    st.markdown(f"**Total Visits:** {total_visits}")
+    st.markdown(f"**Total Certificates Downloaded:** {total_downloads}")
+    st.markdown("---")
     # Admin sidebar
     st.sidebar.header("🔐 Admin Access")
     admin_pass = st.sidebar.text_input("Enter admin password", type="password")
@@ -177,12 +182,7 @@ def main():
         st.sidebar.subheader("📊 Student Progress")
         st.sidebar.dataframe(df_progress)
 
-    # Display stats BEFORE login
-    # --------------------------
-    st.markdown("## 📊 Course Statistics")
-    st.markdown(f"**Total Visits:** {total_visits}")
-    st.markdown(f"**Total Certificates Downloaded:** {total_downloads}")
-    st.markdown("---")
+   
 
     # Load students
     student_df = load_students()
@@ -212,12 +212,7 @@ def main():
     df_progress["RegNo"] = df_progress["RegNo"].astype(str).str.strip()
     record = df_progress[df_progress["RegNo"] == regno]
 
-    # Show total visits & downloads
-    total_visits = df_progress.shape[0]
-    total_downloads = df_progress[df_progress["Certificate_Status"] == "Downloaded"].shape[0]
-    st.markdown(f"**👥 Total Visits:** {total_visits} | **📄 Certificates Downloaded:** {total_downloads}")
-
-
+  
     if not record.empty:
         st.info("✅ You have already watched the video. You can download your certificate below.")
         if not os.path.exists(cert_file):
