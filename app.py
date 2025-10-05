@@ -99,24 +99,32 @@ def upload_progress_to_github(df):
 def generate_certificate(name, regno, year, section, dept): 
     timestamp = datetime.now().strftime("%Y-%m-%d") 
     file_path = os.path.join(CERT_DIR, f"{name}_{regno}.pdf") 
+
     pdf = FPDF(orientation="L", unit="mm", format="A4") 
-pdf.add_page()
-if BG_IMAGE_PATH:
-    pdf.image(BG_IMAGE_PATH, x=0, y=0, w=297, h=210)
-pdf.ln(91)
-pdf.set_font("Helvetica", 'B', 28)
-pdf.cell(0, 5, name, ln=True, align="C")
-pdf.ln(5)
-pdf.set_font("Helvetica", '', 20)
-pdf.cell(0, 5, f"{regno}", ln=True, align="C")
-pdf.ln(5)
-pdf.set_font("Helvetica", '', 20)
-pdf.cell(0, 15, f"{year} {section}", ln=True, align="C")
-pdf.ln(5)
-pdf.set_font("Helvetica", '', 16)
-pdf.cell(0, 10, f" {timestamp}", ln=True, align="R")
+    pdf.add_page()
+
+    if BG_IMAGE_PATH and os.path.exists(BG_IMAGE_PATH):
+        pdf.image(BG_IMAGE_PATH, x=0, y=0, w=297, h=210)
+
+    pdf.ln(91)
+    pdf.set_font("Helvetica", 'B', 28)
+    pdf.cell(0, 5, name, ln=True, align="C")
+
+    pdf.ln(5)
+    pdf.set_font("Helvetica", '', 20)
+    pdf.cell(0, 5, f"{regno}", ln=True, align="C")
+
+    pdf.ln(5)
+    pdf.set_font("Helvetica", '', 20)
+    pdf.cell(0, 15, f"{year} {section} - {dept}", ln=True, align="C")
+
+    pdf.ln(5)
+    pdf.set_font("Helvetica", '', 16)
+    pdf.cell(0, 10, f"{timestamp}", ln=True, align="R")
+
     pdf.output(file_path)
     return file_path
+
 
 # ====================== VIDEO WITH TIMER ======================
 def show_video_with_timer(video_url, duration_sec):
