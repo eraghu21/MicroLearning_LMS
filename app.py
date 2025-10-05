@@ -14,7 +14,7 @@ BUFFER_SIZE = 64 * 1024
 CERT_DIR = "certificates"
 os.makedirs(CERT_DIR, exist_ok=True)
 
-VIDEO_URL = "https://youtu.be/yuNwRG2o_n8"  # Replace with your video ID
+VIDEO_URL = "https://youtu.be/yuNwRG2o_n8"  
 VIDEO_DURATION = 900  # 15 minutes
 
 AES_FILE = st.secrets["aes"]["file"]
@@ -103,13 +103,17 @@ def generate_certificate(name, regno, year, section, dept):
 pdf.add_page()
 if BG_IMAGE_PATH:
     pdf.image(BG_IMAGE_PATH, x=0, y=0, w=297, h=210)
-pdf.ln(91) pdf.set_font("Helvetica", 'B', 28)
+pdf.ln(91)
+pdf.set_font("Helvetica", 'B', 28)
 pdf.cell(0, 5, name, ln=True, align="C")
-pdf.ln(5) pdf.set_font("Helvetica", '', 20)
+pdf.ln(5)
+pdf.set_font("Helvetica", '', 20)
 pdf.cell(0, 5, f"{regno}", ln=True, align="C")
-pdf.ln(5) pdf.set_font("Helvetica", '', 20)
+pdf.ln(5)
+pdf.set_font("Helvetica", '', 20)
 pdf.cell(0, 15, f"{year} {section}", ln=True, align="C")
-pdf.ln(5) pdf.set_font("Helvetica", '', 16)
+pdf.ln(5)
+pdf.set_font("Helvetica", '', 16)
 pdf.cell(0, 10, f" {timestamp}", ln=True, align="R")
 pdf.output(file_path)
 
