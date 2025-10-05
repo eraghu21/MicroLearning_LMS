@@ -102,7 +102,7 @@ def generate_certificate(name, regno, year, section, dept):
     pdf = FPDF(orientation="L", unit="mm", format="A4")
     pdf.add_page()
     if BG_IMAGE_PATH:
-    pdf.image(BG_IMAGE_PATH, x=0, y=0, w=297, h=210)
+        pdf.image(BG_IMAGE_PATH, x=0, y=0, w=297, h=210)
     pdf.ln(90)
     pdf.set_font("Helvetica", 'B', 28)
     pdf.cell(0, 20, name, ln=True, align="C")
