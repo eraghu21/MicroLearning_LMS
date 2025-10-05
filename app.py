@@ -127,7 +127,14 @@ def generate_certificate(name, regno, year, section, dept):
 def show_video_with_timer(video_url, duration_sec):
     html_code = f"""
     <div>
-        <iframe width="900" height="550" src="{video_url}" frameborder="0" allowfullscreen></iframe>
+    <iframe 
+    width="900" 
+    height="550" 
+    src="https://www.youtube.com/embed/yuNwRG2o_n8" 
+    frameborder="0" 
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+    allowfullscreen>
+    </iframe>
         <p id="timer_text">⏳ Watch the video. Time left: {duration_sec} seconds</p>
         <script>
             var timeLeft = {duration_sec};
