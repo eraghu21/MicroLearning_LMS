@@ -109,14 +109,14 @@ def generate_certificate(name, regno, year, section, dept):
     pdf.ln(91)
     pdf.set_font("Helvetica", 'B', 29)
     pdf.cell(0, 5, name, ln=True, align="C")
-
+    pdf.ln(55)
+    pdf.set_font("Helvetica", '', 16)
+    pdf.cell(0, 10, f"Completed on: {timestamp}", ln=True, align="C")
     pdf.ln(5)
     pdf.set_font("Helvetica", '', 15)
     pdf.cell(0, 5, f"{regno}- {year} {dept} - {section}", ln=True, align="C")
 
-    pdf.ln(55)
-    pdf.set_font("Helvetica", '', 16)
-    pdf.cell(0, 10, f"Completed on: {timestamp}", ln=True, align="C")
+    
 
     pdf.output(file_path)
     return file_path
