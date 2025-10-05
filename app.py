@@ -128,7 +128,7 @@ def show_video_with_timer(video_url, duration_sec):
     html_code = f"""
     <div>
     <iframe 
-    width="900" 
+    width="750" 
     height="550" 
     src="https://www.youtube.com/embed/yuNwRG2o_n8" 
     frameborder="0" 
