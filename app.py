@@ -129,7 +129,7 @@ def show_video_with_timer(video_url, duration_sec):
     <div>
    <iframe 
         src="https://www.youtube.com/embed/yuNwRG2o_n8" 
-        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" 
+        style="position: absolute; top: 0; left: 0; width: 100%; height: 90%;" 
         frameborder="0" 
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
         allowfullscreen>
