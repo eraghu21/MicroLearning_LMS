@@ -126,19 +126,28 @@ def generate_certificate(name, regno, year, section, dept):
 # ====================== VIDEO WITH TIMER ======================
 def show_video_with_timer(video_url, duration_sec):
     html_code = f"""
-    <div>
-   <iframe 
-        src="https://www.youtube.com/embed/yuNwRG2o_n8" 
-        style="position: absolute; top: 0; left: 0; width: 100%; height: 80%;" 
-        frameborder="0" 
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-        allowfullscreen>
-    </iframe>
-        <p id="timer_text">⏳ Watch the video. Time left: {duration_sec} seconds</p>
+    <div style="display: flex; flex-direction: column; align-items: center; width: 100%;">
+        <!-- Timer on top -->
+        <p id="timer_text" style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">
+            ⏳ Watch the video. Time left: {duration_sec} seconds
+        </p>
+
+        <!-- Video below -->
+        <div style="position: relative; width: 100%; padding-bottom: 56.25%;">
+            <iframe 
+                src="{video_url.replace('youtu.be', 'https://www.youtube.com/embed/yuNwRG2o_n8').split('?')[0]}" 
+                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" 
+                frameborder="0" 
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                allowfullscreen>
+            </iframe>
+        </div>
+
         <script>
             var timeLeft = {duration_sec};
             var timerText = document.getElementById("timer_text");
             localStorage.removeItem("video_finished");
+
             var countdown = setInterval(function() {{
                 if(timeLeft <= 0) {{
                     clearInterval(countdown);
@@ -153,9 +162,8 @@ def show_video_with_timer(video_url, duration_sec):
         </script>
     </div>
     """
-    
-    components.html(html_code, height=500, scrolling=True)
 
+    components.html(html_code, height=600, scrolling=True)
 # ====================== MAIN APP ======================
 def main():
     st.title("🎓 CS22088 _Mobile Application Development ( Microlearning_ LMS)")
