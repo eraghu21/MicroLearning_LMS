@@ -96,38 +96,22 @@ def upload_progress_to_github(df):
     return put_resp.status_code in [200, 201]
 
 # ====================== GENERATE CERTIFICATE ======================
-def generate_certificate(name, regno, year, section, dept):
-    timestamp = datetime.now().strftime("%Y-%m-%d")
-    file_path = os.path.join(CERT_DIR, f"{name}_{regno}.pdf")
-
-    pdf = FPDF(orientation="L", unit="mm", format="A4")
-    pdf.add_page()
-
-    # Set full-page background
-    if os.path.exists(BG_IMAGE_PATH):
-        pdf.image(BG_IMAGE_PATH, x=0, y=0, w=297, h=210)
-
-    # Text color
-    pdf.set_text_color(0, 0, 0)
-
-    # Name
-    pdf.set_xy(0, 92)
-    pdf.set_font("Helvetica", 'B', 30)
-    pdf.cell(297, 10, name, ln=True, align="C")
-
-    # Reg No
-    pdf.set_font("Helvetica", '', 22)
-    pdf.set_xy(0, 105)
-    pdf.cell(297, 10, regno, ln=True, align="C")
-
-    # Year, Section, Dept
-    pdf.set_xy(0, 118)
-    pdf.cell(297, 10, f"{year} {section} - {dept}", ln=True, align="C")
-
-    # Date at bottom-right
-    pdf.set_font("Helvetica", '', 16)
-    pdf.set_xy(-60, 192)
-    pdf.cell(50, 10, f"Date: {timestamp}", ln=False, align="R")
+def generate_certificate(name, regno, year, section, dept): 
+    timestamp = datetime.now().strftime("%Y-%m-%d") 
+    file_path = os.path.join(CERT_DIR, f"{name}_{regno}.pdf") 
+    pdf = FPDF(orientation="L", unit="mm", format="A4") 
+pdf.add_page()
+if BG_IMAGE_PATH:
+    pdf.image(BG_IMAGE_PATH, x=0, y=0, w=297, h=210)
+pdf.ln(91) pdf.set_font("Helvetica", 'B', 28)
+pdf.cell(0, 5, name, ln=True, align="C")
+pdf.ln(5) pdf.set_font("Helvetica", '', 20)
+pdf.cell(0, 5, f"{regno}", ln=True, align="C")
+pdf.ln(5) pdf.set_font("Helvetica", '', 20)
+pdf.cell(0, 15, f"{year} {section}", ln=True, align="C")
+pdf.ln(5) pdf.set_font("Helvetica", '', 16)
+pdf.cell(0, 10, f" {timestamp}", ln=True, align="R")
+pdf.output(file_path)
 
     pdf.output(file_path)
     return file_path
