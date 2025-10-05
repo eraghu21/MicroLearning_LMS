@@ -255,8 +255,7 @@ def main():
             st.success("🎉 Certificate generated! You can download it now.")
             with open(cert_file, "rb") as f:
                 st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file), key=f"download_after_{regno}")
-            if st.button("🎓 Download Certificate"):
-               st.session_state.download_count += 1
+                st.session_state.download_count += 1
     # ... your certificate generation code ...
 
 if __name__ == "__main__":
