@@ -134,7 +134,7 @@ def show_video_with_timer(video_url, duration_sec):
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
         allowfullscreen>
     </iframe>
-        <p id="timer_text">⏳ Watch the video. Time left: {duration_sec} seconds</p>
+        
         <script>
             var timeLeft = {duration_sec};
             var timerText = document.getElementById("timer_text");
@@ -153,6 +153,7 @@ def show_video_with_timer(video_url, duration_sec):
         </script>
     </div>
     """
+    <p id="timer_text">⏳ Watch the video. Time left: {duration_sec} seconds</p>
     components.html(html_code, height=500, scrolling=True)
 
 # ====================== MAIN APP ======================
