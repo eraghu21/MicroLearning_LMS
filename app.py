@@ -35,7 +35,7 @@ def save_certificate_background():
         return None
     clean_b64 = certificate_base64.replace("\n", "").replace(" ", "")
     img_bytes = base64.b64decode(clean_b64)
-    file_path = os.path.join(CERT_DIR, "certificate_bg.jpeg")
+    file_path = os.path.join(CERT_DIR, "madlms.png")
     os.makedirs(CERT_DIR, exist_ok=True)
     with open(file_path, "wb") as f:
         f.write(img_bytes)
