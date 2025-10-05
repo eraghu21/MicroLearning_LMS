@@ -115,8 +115,8 @@ pdf.cell(0, 15, f"{year} {section}", ln=True, align="C")
 pdf.ln(5)
 pdf.set_font("Helvetica", '', 16)
 pdf.cell(0, 10, f" {timestamp}", ln=True, align="R")
-pdf.output(file_path)
-return file_path
+    pdf.output(file_path)
+    return file_path
 
 # ====================== VIDEO WITH TIMER ======================
 def show_video_with_timer(video_url, duration_sec):
