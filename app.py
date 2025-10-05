@@ -107,16 +107,12 @@ def generate_certificate(name, regno, year, section, dept):
         pdf.image(BG_IMAGE_PATH, x=0, y=0, w=297, h=210)
 
     pdf.ln(91)
-    pdf.set_font("Helvetica", 'B', 28)
+    pdf.set_font("Helvetica", 'B', 29)
     pdf.cell(0, 5, name, ln=True, align="C")
 
     pdf.ln(5)
-    pdf.set_font("Helvetica", '', 20)
-    pdf.cell(0, 5, f"{regno}", ln=True, align="C")
-
-    pdf.ln(5)
-    pdf.set_font("Helvetica", '', 20)
-    pdf.cell(0, 15, f"{year} {section} - {dept}", ln=True, align="C")
+    pdf.set_font("Helvetica", '', 15)
+    pdf.cell(0, 5, f"{regno}- {year} {dept} - {section}", ln=True, align="C")
 
     pdf.ln(5)
     pdf.set_font("Helvetica", '', 16)
