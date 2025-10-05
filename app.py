@@ -105,7 +105,14 @@ def generate_certificate(name, regno, year, section, dept):
 
     if BG_IMAGE_PATH and os.path.exists(BG_IMAGE_PATH):
         pdf.image(BG_IMAGE_PATH, x=0, y=0, w=297, h=210)
+     # Optional: Text watermark on top of logo (light grey)
+    pdf.set_font("Helvetica", 'B', 50)
+    pdf.set_text_color(200, 200, 200)  # light grey
+    pdf.rotate(45, x=148, y=105)
+    pdf.text(x=40, y=105, txt="SAMPLE")  # Change to "CONFIDENTIAL" if needed
+    pdf.rotate(0)  # reset rotation
 
+    
     pdf.ln(91)
     pdf.set_font("Helvetica", 'B', 29)
     pdf.cell(0, 5, name, ln=True, align="C")
@@ -116,7 +123,7 @@ def generate_certificate(name, regno, year, section, dept):
 
     pdf.ln(55)
     pdf.set_font("Helvetica", '', 16)
-    pdf.cell(0, 10, Completed on: f"{timestamp}", ln=True, align="C")
+    pdf.cell(0, 10, f"Completed on: {timestamp}", ln=True, align="C")
 
     pdf.output(file_path)
     return file_path
