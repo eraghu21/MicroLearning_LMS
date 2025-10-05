@@ -134,14 +134,14 @@ def show_video_with_timer(video_url, duration_sec):
 
         <!-- Video below -->
         <div style="position: relative; width: 100%; padding-bottom: 56.25%;">
-            <iframe 
-                src="{video_url.replace('youtu.be', 'https://www.youtube.com/embed/yuNwRG2o_n8').split('?')[0]}" 
-                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" 
-                frameborder="0" 
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                allowfullscreen>
-            </iframe>
-        </div>
+    <iframe 
+        src="https://www.youtube.com/embed/yuNwRG2o_n8" 
+        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" 
+        frameborder="0" 
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+        allowfullscreen>
+    </iframe>
+    </div>
 
         <script>
             var timeLeft = {duration_sec};
