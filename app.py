@@ -167,13 +167,28 @@ def show_video_with_timer(video_url, duration_sec):
 # ====================== MAIN APP ======================
 def main():
     st.title("🎓 CS22088 _Mobile Application Development ( Microlearning_ LMS)")
-    total_visits = 0
-    total_downloads = 0
 
-    st.markdown("## 📊 Course Statistics")
-    st.markdown(f"**Total Visits:** {total_visits}")
-    st.markdown(f"**Total Certificates Downloaded:** {total_downloads}")
-    st.markdown("---")
+    # Initialize counters if not exists
+if "total_visits" not in st.session_state:
+    st.session_state.total_visits = 0
+if "total_downloads" not in st.session_state:
+    st.session_state.total_downloads = 0
+
+# Increment visit count each time page loads
+st.session_state.total_visits += 1
+
+st.markdown("## 📊 Course Statistics")
+st.markdown(f"**Total Visits:** {st.session_state.total_visits}")
+st.markdown(f"**Total Certificates Downloaded:** {st.session_state.total_downloads}")
+st.markdown("---")
+
+# Example button to simulate certificate download
+if st.button("Download Certificate"):
+    st.session_state.total_downloads += 1
+    st.success("✅ Certificate downloaded!")
+
+
+    
     # Admin sidebar
     st.sidebar.header("🔐 Admin Access")
     admin_pass = st.sidebar.text_input("Enter admin password", type="password")
