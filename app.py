@@ -114,7 +114,7 @@ def generate_certificate(name, regno, year, section, dept):
     pdf.set_font("Helvetica", '', 15)
     pdf.cell(0, 5, f"{regno}- {year} {dept} - {section}", ln=True, align="C")
 
-    pdf.ln(75)
+    pdf.ln(65)
     pdf.set_font("Helvetica", '', 16)
     pdf.cell(0, 10, f"Completed on: {timestamp}", ln=True, align="C")
     
@@ -151,7 +151,7 @@ def show_video_with_timer(video_url, duration_sec):
 
 # ====================== MAIN APP ======================
 def main():
-    st.title("🎓 Student LMS")
+    st.title("🎓 CS22088 _Mobile Application Development ( Microlearning_ LMS)")
 
     # Admin sidebar
     st.sidebar.header("🔐 Admin Access")
