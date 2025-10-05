@@ -191,9 +191,10 @@ def main():
     record = df_progress[df_progress["RegNo"] == regno]
 
     # Show total visits & downloads
-    total_visits = df_progress.shape[0]
+   total_visits = df_progress.shape[0]
     total_downloads = df_progress[df_progress["Certificate_Status"] == "Downloaded"].shape[0]
-    st.markdown(f"**Total Visits:** {total_visits} | **Total Certificates Downloaded:** {total_downloads}")
+    st.markdown(f"**👥 Total Visits:** {total_visits} | **📄 Certificates Downloaded:** {total_downloads}")
+
 
     if not record.empty:
         st.info("✅ You have already watched the video. You can download your certificate below.")
