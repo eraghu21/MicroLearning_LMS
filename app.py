@@ -129,12 +129,12 @@ def show_video_with_timer(video_url, duration_sec):
     <div>
    <iframe 
         src="https://www.youtube.com/embed/yuNwRG2o_n8" 
-        style="position: absolute; top: 0; left: 0; width: 100%; height: 90%;" 
+        style="position: absolute; top: 0; left: 0; width: 100%; height: 80%;" 
         frameborder="0" 
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
         allowfullscreen>
     </iframe>
-        
+        <p id="timer_text">⏳ Watch the video. Time left: {duration_sec} seconds</p>
         <script>
             var timeLeft = {duration_sec};
             var timerText = document.getElementById("timer_text");
@@ -153,7 +153,7 @@ def show_video_with_timer(video_url, duration_sec):
         </script>
     </div>
     """
-    <p id="timer_text">⏳ Watch the video. Time left: {duration_sec} seconds</p>
+    
     components.html(html_code, height=500, scrolling=True)
 
 # ====================== MAIN APP ======================
