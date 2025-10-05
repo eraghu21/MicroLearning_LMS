@@ -167,8 +167,9 @@ def show_video_with_timer(video_url, duration_sec):
 # ====================== MAIN APP ======================
 def main():
     st.title("🎓 CS22088 _Mobile Application Development ( Microlearning_ LMS)")
-     # Display stats BEFORE login
-    # --------------------------
+    total_visits = 0
+    total_downloads = 0
+
     st.markdown("## 📊 Course Statistics")
     st.markdown(f"**Total Visits:** {total_visits}")
     st.markdown(f"**Total Certificates Downloaded:** {total_downloads}")
