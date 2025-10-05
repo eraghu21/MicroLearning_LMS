@@ -177,6 +177,13 @@ def main():
         st.sidebar.subheader("📊 Student Progress")
         st.sidebar.dataframe(df_progress)
 
+    # Display stats BEFORE login
+    # --------------------------
+    st.markdown("## 📊 Course Statistics")
+    st.markdown(f"**Total Visits:** {total_visits}")
+    st.markdown(f"**Total Certificates Downloaded:** {total_downloads}")
+    st.markdown("---")
+
     # Load students
     student_df = load_students()
     if student_df is None:
