@@ -26,7 +26,42 @@ PROGRESS_FILE = st.secrets["github"]["progress_file"]
 
 ADMIN_PASSWORD = st.secrets["admin"]["password"]
 
-#==============Counts=================
+# ====================== COUNTERS ======================
+def update_visit_count():
+    count_file = "counter.txt"
+    if not os.path.exists(count_file):
+        with open(count_file, "w") as f:
+            f.write("0")
+    with open(count_file, "r") as f:
+        count = int(f.read())
+    if "counted" not in st.session_state:
+        count += 1
+        with open(count_file, "w") as f:
+            f.write(str(count))
+        st.session_state.counted = True
+    return count
+
+def update_download_count():
+    count_file = "downloads.txt"
+    if not os.path.exists(count_file):
+        with open(count_file, "w") as f:
+            f.write("0")
+    with open(count_file, "r") as f:
+        count = int(f.read())
+    count += 1
+    with open(count_file, "w") as f:
+        f.write(str(count))
+    return count
+
+def get_download_count():
+    count_file = "downloads.txt"
+    if not os.path.exists(count_file):
+        return 0
+    with open(count_file, "r") as f:
+        return int(f.read())
+
+visit_count = update_visit_count()
+download_total = get_download_count()
 
 
 # ====================== EMBEDDED CERTIFICATE BACKGROUND ======================
@@ -170,7 +205,8 @@ def show_video_with_timer(video_url, duration_sec):
 # ====================== MAIN APP ======================
 def main():
     st.title("🎓 CS22088 _Mobile Application Development ( Microlearning_ LMS)")
-      
+    st.markdown(f"<div style='text-align:right; color:gray;'>👁️ Day Visits: {visit_count}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align:right; color:gray;'>📥 Day Downloads: {download_total}</div>", unsafe_allow_html=True) 
     # Admin sidebar
     st.sidebar.header("🔐 Admin Access")
     admin_pass = st.sidebar.text_input("Enter admin password", type="password")
@@ -241,7 +277,7 @@ def main():
             st.success("🎉 Certificate generated! You can download it now.")
             with open(cert_file, "rb") as f:
                 st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file), key=f"download_after_{regno}")
-                st.session_state.download_count += 1
+                update_download_count()
     # ... your certificate generation code ...
 
 if __name__ == "__main__":
