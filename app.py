@@ -253,7 +253,7 @@ def main():
             cert_file = generate_certificate(name, regno, year, section, dept)
         with open(cert_file, "rb") as f:
             st.download_button("📄 Download Certificate", f, file_name=os.path.basename(cert_file), key=f"download_{regno}")
-             update_download_count()
+            update_download_count()
     else:
         if st.session_state.get("current_student") != regno:
             st.session_state.video_finished = False
