@@ -205,8 +205,8 @@ def show_video_with_timer(video_url, duration_sec):
 # ====================== MAIN APP ======================
 def main():
     st.title("🎓 CS22088 _Mobile Application Development ( Microlearning_ LMS)")
-    st.markdown(f"<div style='text-align:right; color:gray;'>👁️ Day Visits: {visit_count}</div>", unsafe_allow_html=True)
-    st.markdown(f"<div style='text-align:right; color:gray;'>📥 Day Downloads: {download_total}</div>", unsafe_allow_html=True) 
+    st.markdown(f"<div style='text-align:right; color:gray;'>👁️ Visits: {visit_count}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align:right; color:gray;'>📥 Downloads: {download_total}</div>", unsafe_allow_html=True) 
     # Admin sidebar
     st.sidebar.header("🔐 Admin Access")
     admin_pass = st.sidebar.text_input("Enter admin password", type="password")
